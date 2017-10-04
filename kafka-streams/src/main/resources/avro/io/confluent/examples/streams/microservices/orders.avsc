@@ -1,0 +1,10 @@
+{"namespace": "io.confluent.examples.streams.avro.microservices",
+ "type": "record",
+ "name": "Order",
+ "fields": [
+     {"name": "id", "type": "long"},
+     {"name": "state", "type": "string"},
+     {"name": "product",  "type": "string"},
+     {"name": "quantity", "type": "int"}
+ ]
+}

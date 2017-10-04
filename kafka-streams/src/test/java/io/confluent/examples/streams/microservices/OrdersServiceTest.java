@@ -2,6 +2,8 @@ package io.confluent.examples.streams.microservices;
 
 import io.confluent.examples.streams.IntegrationTestUtils;
 import io.confluent.examples.streams.avro.microservices.Order;
+import io.confluent.examples.streams.avro.microservices.OrderType;
+import io.confluent.examples.streams.avro.microservices.ProductType;
 import io.confluent.examples.streams.kafka.EmbeddedSingleNodeKafkaCluster;
 import io.confluent.kafka.streams.serdes.avro.SpecificAvroSerde;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
@@ -25,6 +27,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Properties;
 
+import static io.confluent.examples.streams.avro.microservices.OrderType.*;
+import static io.confluent.examples.streams.avro.microservices.ProductType.*;
 import static io.confluent.kafka.serializers.AbstractKafkaAvroSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG;
 import static java.util.Arrays.asList;
 import static java.util.Collections.singletonList;
@@ -39,7 +43,7 @@ public class OrdersServiceTest {
     private static String ordersTopic = OrdersService.ORDERS;
     private static String stockTopic = OrdersService.STOCK;
     private static String outputTopic = OrdersService.OUTPUT;
-    private List<KeyValue<String, Integer>> inventory;
+    private List<KeyValue<ProductType, Integer>> inventory;
     private List<Order> orders;
     private List<Order> expected;
     private static SpecificAvroSerde<Order> ordersSerde;
@@ -54,21 +58,21 @@ public class OrdersServiceTest {
     }
 
     @Test
-    public void shouldProcessOrdersWithSufficientStockAndFailOrdersWithInsufficientStock() throws Exception {
+    public void shouldProcessOrdersWithSufficientStockAndRejectOrdersWithInsufficientStock() throws Exception {
 
         //Given
         OrdersService orderService = new OrdersService();
 
         inventory = asList(
-                new KeyValue<>("Underpants", 75),
-                new KeyValue<>("Jumpers", 1)
+                new KeyValue<>(UNDERPANTS, 75),
+                new KeyValue<>(JUMPERS, 1)
         );
         sendInventory();
 
         orders = asList(
-                new Order(0L, "Created", "Underpants", 3),
-                new Order(1L, "Created", "Jumpers", 1),
-                new Order(2L, "Created", "Jumpers", 1) //Should be rejected
+                new Order(0L, CREATED, UNDERPANTS, 3),
+                new Order(1L, CREATED, JUMPERS, 1),
+                new Order(2L, CREATED, JUMPERS, 1)
         );
         sendOrders();
 
@@ -79,21 +83,26 @@ public class OrdersServiceTest {
 
         //Then the final order for Jumpers should have been 'rejected' as it's out of stock
         expected = asList(
-                new Order(0L, "Validated", "Underpants", 3),
-                new Order(1L, "Validated", "Jumpers", 1),
-                new Order(2L, "Rejected", "Jumpers", 1)
+                new Order(0L, CREATED, UNDERPANTS, 3),
+                new Order(1L, CREATED, JUMPERS, 1),
+                new Order(2L, CREATED, JUMPERS, 1),
+                new Order(0L, VALIDATED, UNDERPANTS, 3),
+                new Order(1L, VALIDATED, JUMPERS, 1),
+                new Order(2L, INSUFFICIENT_STOCK, JUMPERS, 1)
         );
         assertThat(readOrders()).isEqualTo(expected);
 
-        //And the inventory changelog should have recorded a reduction in stock values
-        List<KeyValue<String, Long>> inventoryChangelog = readInventoryStateStore();
-        assertThat(inventoryChangelog.get(2)).isEqualTo(new KeyValue("Underpants", 72L));
-        assertThat(inventoryChangelog.get(3)).isEqualTo(new KeyValue("Jumpers", 0L));
+        //And the reservations should have been incremented twice, once for each validated order
+        List<KeyValue<ProductType, Long>> inventoryChangelog = readInventoryStateStore(2);
+        assertThat(inventoryChangelog).isEqualTo(asList(
+                new KeyValue(UNDERPANTS.toString(), 3L),
+                new KeyValue(JUMPERS.toString(), 1L)
+        ));
     }
 
-    private List<KeyValue<String, Long>> readInventoryStateStore() throws InterruptedException {
+    private List<KeyValue<ProductType, Long>> readInventoryStateStore(int numberOfRecordsToWaitFor) throws InterruptedException {
         return IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(inventoryConsumerProperties(),
-                ProcessorStateManager.storeChangelogTopic(OrdersService.ORDERS_SERVICE_APP_ID, stockCountStoreName), 4);
+                ProcessorStateManager.storeChangelogTopic(OrdersService.ORDERS_SERVICE_APP_ID, stockCountStoreName), numberOfRecordsToWaitFor);
     }
 
     private List<Order> readOrders() throws InterruptedException {
@@ -104,7 +113,7 @@ public class OrdersServiceTest {
 
 
         KafkaConsumer<Long, Order> consumer = new KafkaConsumer(consumerConfig, Serdes.Long().deserializer(), ordersSerde.deserializer());
-        consumer.subscribe(singletonList(outputTopic));
+        consumer.subscribe(singletonList(ordersTopic));
 
         List<Order> actualValues = new ArrayList<>();
         TestUtils.waitForCondition(() -> {
@@ -119,7 +128,7 @@ public class OrdersServiceTest {
     }
 
     private void sendInventory() {
-        KafkaProducer<String, Integer> stockProducer = new KafkaProducer<>(producerConfig(), Serdes.String().serializer(), Serdes.Integer().serializer());
+        KafkaProducer<ProductType, Integer> stockProducer = new KafkaProducer<>(producerConfig(), OrdersService.productTypeSerde.serializer(), Serdes.Integer().serializer());
         for (KeyValue kv : inventory)
             stockProducer.send(new ProducerRecord(stockTopic, kv.key, kv.value));
     }

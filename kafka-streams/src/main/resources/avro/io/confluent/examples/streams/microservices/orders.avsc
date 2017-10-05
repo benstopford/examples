@@ -2,7 +2,7 @@
 {"namespace": "io.confluent.examples.streams.avro.microservices",
  "type": "enum",
  "name": "OrderType",
- "symbols" : ["CREATED", "VALIDATED", "INSUFFICIENT_STOCK", "PAYMENT_FAILED", "PAYMENT_SUCCEEDED", "COMPLETE"]
+ "symbols" : ["CREATED", "VALIDATED", "SHIPPED"]
 },
 {"namespace": "io.confluent.examples.streams.avro.microservices",
  "type": "enum",

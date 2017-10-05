@@ -1,15 +1,30 @@
 package io.confluent.examples.streams.microservices;
 
 import io.confluent.examples.streams.avro.microservices.ProductType;
+import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serializer;
+import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.state.RocksDBConfigSetter;
 import org.rocksdb.Options;
 
 import java.util.Map;
+import java.util.Properties;
 
 class MicroserviceUtils {
+
+    static Properties streamsConfig(String bootstrapServers, String stateDir) {
+        Properties config = new Properties();
+        // Workaround for a known issue with RocksDB in environments where you have only 1 cpu core.
+        config.put(StreamsConfig.ROCKSDB_CONFIG_SETTER_CLASS_CONFIG, CustomRocksDBConfig.class);
+        config.put(StreamsConfig.APPLICATION_ID_CONFIG, InventoryService.INVENTORY_SERVICE_APP_ID);
+        config.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
+        config.put(StreamsConfig.STATE_DIR_CONFIG, stateDir);
+        config.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
+        config.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 500);
+        return config;
+    }
 
     public static class CustomRocksDBConfig implements RocksDBConfigSetter {
 
@@ -24,16 +39,15 @@ class MicroserviceUtils {
         }
     }
 
+    //TODO - how do I serialise an java Enum in streams without writing a serialiser myself?
     public static final class ProductTypeSerde implements Serde<ProductType> {
 
         @Override
         public void configure(Map<String, ?> map, boolean b) {
-
         }
 
         @Override
         public void close() {
-
         }
 
         @Override
@@ -41,7 +55,6 @@ class MicroserviceUtils {
             return new Serializer<ProductType>() {
                 @Override
                 public void configure(Map<String, ?> map, boolean b) {
-
                 }
 
                 @Override
@@ -51,7 +64,6 @@ class MicroserviceUtils {
 
                 @Override
                 public void close() {
-
                 }
             };
         }
@@ -61,7 +73,6 @@ class MicroserviceUtils {
             return new Deserializer<ProductType>() {
                 @Override
                 public void configure(Map<String, ?> map, boolean b) {
-
                 }
 
                 @Override
@@ -71,7 +82,6 @@ class MicroserviceUtils {
 
                 @Override
                 public void close() {
-
                 }
             };
         }

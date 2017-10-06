@@ -111,7 +111,7 @@ public class InventoryServiceTest extends OrdersServiceTestUtils {
                 actualValues.add(record.value());
             }
             return actualValues.size() == numberToRead;
-        }, 5000, "Timed out reading orders.");
+        }, 20000, "Timed out reading orders.");
         consumer.close();
         return actualValues;
     }

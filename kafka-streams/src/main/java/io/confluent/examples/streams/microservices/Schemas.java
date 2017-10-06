@@ -1,7 +1,8 @@
 package io.confluent.examples.streams.microservices;
 
 import io.confluent.examples.streams.avro.microservices.Order;
-import io.confluent.examples.streams.avro.microservices.OrderValidation;
+import io.confluent.examples.streams.avro.microservices.OrderValidations;
+import io.confluent.examples.streams.avro.microservices.OrderValue;
 import io.confluent.kafka.streams.serdes.avro.SpecificAvroSerde;
 import org.apache.avro.specific.SpecificRecord;
 
@@ -19,7 +20,8 @@ public class Schemas {
 
     public static class SerdeBuilders {
         public static final SchemaBuilder<Order> ORDERS = new SchemaBuilder<>();
-        public static final SchemaBuilder<OrderValidation> ORDER_VALIDATIONS = new SchemaBuilder<>();
+        public static final SchemaBuilder<OrderValidations> ORDER_VALIDATIONS = new SchemaBuilder<>();
+        public static final SchemaBuilder<OrderValue> ORDER_VALUE = new SchemaBuilder<>();
     }
 
     public static class SchemaBuilder<T extends SpecificRecord> {

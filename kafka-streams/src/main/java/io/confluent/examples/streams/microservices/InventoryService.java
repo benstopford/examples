@@ -2,7 +2,7 @@ package io.confluent.examples.streams.microservices;
 
 import io.confluent.examples.streams.avro.microservices.Order;
 import io.confluent.examples.streams.avro.microservices.OrderType;
-import io.confluent.examples.streams.avro.microservices.OrderValidation;
+import io.confluent.examples.streams.avro.microservices.OrderValidations;
 import io.confluent.examples.streams.avro.microservices.ProductType;
 import io.confluent.kafka.streams.serdes.avro.SpecificAvroSerde;
 import org.apache.kafka.common.serialization.Serdes;
@@ -26,7 +26,6 @@ public class InventoryService {
     public static final String INVENTORY_SERVICE_APP_ID = "inventory-service";
     public static final String RESERVED_STOCK_STORE_NAME = "StoreOfReservedStock";
 
-
     public static final ProductTypeSerde PRODUCT_TYPE_SERDE = new ProductTypeSerde();
     public static final String DEFAULT_BOOTSTRAP_SERVERS = "localhost:9092";
     public static final String DEFAULT_SCHEMA_REGISTRY_URL = "http://localhost:8081";
@@ -47,7 +46,7 @@ public class InventoryService {
                                        final String stateDir) {
 
         SpecificAvroSerde<Order> orderSerdes = Schemas.SerdeBuilders.ORDERS.serde(schemaRegistryUrl);
-        SpecificAvroSerde<OrderValidation> orderValidationsSerdes = Schemas.SerdeBuilders.ORDER_VALIDATIONS.serde(schemaRegistryUrl);
+        SpecificAvroSerde<OrderValidations> orderValidationsSerdes = Schemas.SerdeBuilders.ORDER_VALIDATIONS.serde(schemaRegistryUrl);
 
         //Latch onto instances of the orders and inventory topics
         KStreamBuilder builder = new KStreamBuilder();
@@ -78,16 +77,16 @@ public class InventoryService {
 
         //Validate the order based on how much stock we have both in the warehouse
         // inventory and the local store of reserved orders
-        KStream<Long, OrderValidation> validatedOrders = ordersWithInventory
+        KStream<Long, OrderValidations> validatedOrders = ordersWithInventory
                 .transform(InventoryValidator::new, RESERVED_STOCK_STORE_NAME);
 
         //Push the result into the Order Validations topic
-        validatedOrders.to(org.apache.kafka.common.serialization.Serdes.Long(), orderValidationsSerdes, Schemas.Topics.ORDER_VALIDATIONS);
+        validatedOrders.to(Serdes.Long(), orderValidationsSerdes, Schemas.Topics.ORDER_VALIDATIONS);
 
-        return new KafkaStreams(builder, MicroserviceUtils.streamsConfig(bootstrapServers, stateDir));
+        return new KafkaStreams(builder, MicroserviceUtils.streamsConfig(bootstrapServers, stateDir, INVENTORY_SERVICE_APP_ID));
     }
 
-    private static class InventoryValidator implements Transformer<ProductType, KeyValue<Order, Integer>, KeyValue<Long, OrderValidation>> {
+    private static class InventoryValidator implements Transformer<ProductType, KeyValue<Order, Integer>, KeyValue<Long, OrderValidations>> {
         private KeyValueStore<ProductType, Long> reservedStocksStore;
 
         @Override
@@ -97,8 +96,8 @@ public class InventoryService {
         }
 
         @Override
-        public KeyValue<Long, OrderValidation> transform(final ProductType productId, final KeyValue<Order, Integer> orderAndStock) {
-            OrderValidation validated;
+        public KeyValue<Long, OrderValidations> transform(final ProductType productId, final KeyValue<Order, Integer> orderAndStock) {
+            OrderValidations validated;
             Order order = orderAndStock.key;
             Integer warehouseStockCount = orderAndStock.value;
 
@@ -108,21 +107,17 @@ public class InventoryService {
             //If there is enough stock available (considering both warehouse inventory and reserved stock) validate the order
             if (warehouseStockCount - reserved - order.getQuantity() >= 0) {
                 reservedStocksStore.put(order.getProduct(), reserved + order.getQuantity());
-                validated = new OrderValidation(order.getId(), INVENTORY_CHECK, PASS);
+                validated = new OrderValidations(order.getId(), INVENTORY_CHECK, PASS);
             } else {
-                validated = new OrderValidation(order.getId(), INVENTORY_CHECK, FAIL);
+                validated = new OrderValidations(order.getId(), INVENTORY_CHECK, FAIL);
             }
 
             System.out.println("Order set to " + order.getState() + " for product " + order.getProduct() + " as reserved count is " + reserved + " and stock count is " + warehouseStockCount + "and order amount is " + order.getQuantity());
             return KeyValue.pair(validated.getOrderId(), validated);
         }
 
-        private Order setState(Order order, OrderType state) {
-            return new Order(order.getId(), state, order.getProduct(), order.getQuantity());
-        }
-
         @Override
-        public KeyValue<Long, OrderValidation> punctuate(long timestamp) {
+        public KeyValue<Long, OrderValidations> punctuate(long timestamp) {
             return null;
         }
 

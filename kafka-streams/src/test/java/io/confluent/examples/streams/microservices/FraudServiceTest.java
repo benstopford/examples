@@ -23,19 +23,19 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Properties;
 
-import static io.confluent.examples.streams.avro.microservices.OrderType.*;
-import static io.confluent.examples.streams.avro.microservices.ProductType.*;
+import static io.confluent.examples.streams.avro.microservices.OrderType.CREATED;
+import static io.confluent.examples.streams.avro.microservices.ProductType.JUMPERS;
+import static io.confluent.examples.streams.avro.microservices.ProductType.UNDERPANTS;
 import static io.confluent.kafka.serializers.AbstractKafkaAvroSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG;
 import static java.util.Arrays.asList;
 import static java.util.Collections.singletonList;
 import static java.util.Collections.singletonMap;
 import static org.assertj.core.api.Assertions.assertThat;
 
-public class InventoryServiceTest extends OrdersServiceTestUtils {
+public class FraudServiceTest extends OrdersServiceTestUtils {
 
     @ClassRule
     public static final EmbeddedSingleNodeKafkaCluster CLUSTER = new EmbeddedSingleNodeKafkaCluster();
-    private List<KeyValue<ProductType, Integer>> inventory;
     private List<Order> orders;
     private List<OrderValidations> expected;
     private static SpecificAvroSerde<Order> ordersSerde;
@@ -50,21 +50,22 @@ public class InventoryServiceTest extends OrdersServiceTestUtils {
     }
 
     @Test
-    public void shouldProcessOrdersWithSufficientStockAndRejectOrdersWithInsufficientStock() throws Exception {
+    public void shouldValidateWhetherOrderAmountExceedsFraudLimitOverWindow() throws Exception {
+
+        //TODO - add event time to this.
 
         //Given
-        InventoryService orderService = new InventoryService();
-
-        inventory = asList(
-                new KeyValue<>(UNDERPANTS, 75),
-                new KeyValue<>(JUMPERS, 1)
-        );
-        sendInventory(inventory);
+        FraudService orderService = new FraudService();
 
         orders = asList(
-                new Order(0L, 1L, CREATED, UNDERPANTS, 3, 10.00d),
-                new Order(1L, 2L, CREATED, JUMPERS, 1, 75.00d),
-                new Order(2L, 2L, CREATED, JUMPERS, 1, 75.00d)
+                new Order(0L, 0L, CREATED, UNDERPANTS, 3, 5.00d),
+                new Order(1L, 0L, CREATED, JUMPERS, 1, 75.00d), //customer 0 => pass
+                new Order(2L, 1L, CREATED, JUMPERS, 1, 75.00d),
+                new Order(3L, 1L, CREATED, JUMPERS, 1, 75.00d),
+                new Order(4L, 1L, CREATED, JUMPERS, 50, 75.00d), //customer 1 => fail
+                new Order(5L, 2L, CREATED, JUMPERS, 1, 75.00d),
+                new Order(6L, 2L, CREATED, UNDERPANTS, 2000, 5.00d), //customer 2 => fail
+                new Order(7L, 3L, CREATED, UNDERPANTS, 1, 5.00d)  //customer 3 => pass
         );
         sendOrders(orders);
 
@@ -72,54 +73,45 @@ public class InventoryServiceTest extends OrdersServiceTestUtils {
         //When
         orderService.startService(CLUSTER.bootstrapServers(), CLUSTER.schemaRegistryUrl());
 
-
         //Then the final order for Jumpers should have been 'rejected' as it's out of stock
         expected = asList(
-                new OrderValidations(0L, OrderValidationType.INVENTORY_CHECK, OrderValidationResult.PASS),
-                new OrderValidations(1L, OrderValidationType.INVENTORY_CHECK, OrderValidationResult.PASS),
-                new OrderValidations(2L, OrderValidationType.INVENTORY_CHECK, OrderValidationResult.FAIL)
+                new OrderValidations(0L, OrderValidationType.FRAUD_CHECK, OrderValidationResult.PASS),
+                new OrderValidations(1L, OrderValidationType.FRAUD_CHECK, OrderValidationResult.PASS),
+                new OrderValidations(2L, OrderValidationType.FRAUD_CHECK, OrderValidationResult.FAIL),
+                new OrderValidations(3L, OrderValidationType.FRAUD_CHECK, OrderValidationResult.FAIL),
+                new OrderValidations(4L, OrderValidationType.FRAUD_CHECK, OrderValidationResult.FAIL),
+                new OrderValidations(5L, OrderValidationType.FRAUD_CHECK, OrderValidationResult.FAIL),
+                new OrderValidations(6L, OrderValidationType.FRAUD_CHECK, OrderValidationResult.FAIL),
+                new OrderValidations(7L, OrderValidationType.FRAUD_CHECK, OrderValidationResult.PASS)
         );
-        assertThat(readOrderValidations(expected.size())).isEqualTo(expected);
-
-        //And the reservations should have been incremented twice, once for each validated order
-        List<KeyValue<ProductType, Long>> inventoryChangelog = readInventoryStateStore(2);
-        assertThat(inventoryChangelog).isEqualTo(asList(
-                new KeyValue(UNDERPANTS.toString(), 3L),
-                new KeyValue(JUMPERS.toString(), 1L)
-        ));
+        assertThat(readOrderValidations(8)).isEqualTo(expected);
     }
 
     private List<KeyValue<ProductType, Long>> readInventoryStateStore(int numberOfRecordsToWaitFor) throws InterruptedException {
-        return IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(inventoryConsumerProperties(CLUSTER),
+        return IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(inventoryConsumerProperties(InventoryServiceTest.CLUSTER),
                 ProcessorStateManager.storeChangelogTopic(InventoryService.INVENTORY_SERVICE_APP_ID, InventoryService.RESERVED_STOCK_STORE_NAME), numberOfRecordsToWaitFor);
     }
 
-    private List<Order> readOrderValidations(int numberToRead) throws InterruptedException {
+    private List<OrderValidations> readOrderValidations(int numberToRead) throws InterruptedException {
         Properties consumerConfig = new Properties();
         consumerConfig.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
-        consumerConfig.put(ConsumerConfig.GROUP_ID_CONFIG, "inventory-orders-test-reader");
+        consumerConfig.put(ConsumerConfig.GROUP_ID_CONFIG, "orders-test-reader");
         consumerConfig.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
 
-
-        KafkaConsumer<Long, Order> consumer = new KafkaConsumer(consumerConfig, Serdes.Long().deserializer(), ordersSerde.deserializer());
+        KafkaConsumer<Long, OrderValidations> consumer = new KafkaConsumer(consumerConfig, Serdes.Long().deserializer(), Schemas.SerdeBuilders
+                .ORDER_VALIDATIONS.serde(CLUSTER.schemaRegistryUrl()).deserializer());
         consumer.subscribe(singletonList(Schemas.Topics.ORDER_VALIDATIONS));
 
-        List<Order> actualValues = new ArrayList<>();
+        List<OrderValidations> actualValues = new ArrayList<>();
         TestUtils.waitForCondition(() -> {
-            ConsumerRecords<Long, Order> records = consumer.poll(100);
-            for (ConsumerRecord<Long, Order> record : records) {
+            ConsumerRecords<Long, OrderValidations> records = consumer.poll(100);
+            for (ConsumerRecord<Long, OrderValidations> record : records) {
                 actualValues.add(record.value());
             }
             return actualValues.size() == numberToRead;
-        }, 20000, "Timed out reading orders.");
+        }, 30000, "Timed out reading orders.");
         consumer.close();
         return actualValues;
-    }
-
-    private void sendInventory(List<KeyValue<ProductType, Integer>> inventory) {
-        KafkaProducer<ProductType, Integer> stockProducer = new KafkaProducer<>(producerConfig(CLUSTER), InventoryService.PRODUCT_TYPE_SERDE.serializer(), Serdes.Integer().serializer());
-        for (KeyValue kv : inventory)
-            stockProducer.send(new ProducerRecord(Schemas.Topics.WAREHOUSE_INVENTORY, kv.key, kv.value));
     }
 
     private void sendOrders(List<Order> orders) {

@@ -14,11 +14,11 @@ import java.util.Properties;
 
 class MicroserviceUtils {
 
-    static Properties streamsConfig(String bootstrapServers, String stateDir) {
+    static Properties streamsConfig(String bootstrapServers, String stateDir, String appId) {
         Properties config = new Properties();
         // Workaround for a known issue with RocksDB in environments where you have only 1 cpu core.
         config.put(StreamsConfig.ROCKSDB_CONFIG_SETTER_CLASS_CONFIG, CustomRocksDBConfig.class);
-        config.put(StreamsConfig.APPLICATION_ID_CONFIG, InventoryService.INVENTORY_SERVICE_APP_ID);
+        config.put(StreamsConfig.APPLICATION_ID_CONFIG, appId);
         config.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
         config.put(StreamsConfig.STATE_DIR_CONFIG, stateDir);
         config.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");

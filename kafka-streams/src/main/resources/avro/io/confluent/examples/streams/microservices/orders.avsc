@@ -14,8 +14,19 @@
  "name": "Order",
  "fields": [
      {"name": "id", "type": "long"},
+     {"name": "customerId", "type": "long"},
      {"name": "state", "type": "OrderType"},
      {"name": "product",  "type": "ProductType"},
-     {"name": "quantity", "type": "int"}
+     {"name": "quantity", "type": "int"},
+     {"name": "price", "type": "double"}
  ]
-}]
+},
+{"namespace": "io.confluent.examples.streams.avro.microservices",
+   "type": "record",
+   "name": "OrderValue",
+    "fields": [
+     {"name": "order", "type": "Order"},
+     {"name": "value", "type": "double"}
+    ]
+}
+]

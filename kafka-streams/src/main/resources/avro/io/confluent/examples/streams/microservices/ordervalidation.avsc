@@ -11,7 +11,7 @@
 },
 {"namespace": "io.confluent.examples.streams.avro.microservices",
  "type": "record",
- "name": "OrderValidation",
+ "name": "OrderValidations",
  "fields": [
      {"name": "orderId", "type": "long"},
      {"name": "checkType", "type": "OrderValidationType"},

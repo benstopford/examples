@@ -1,36 +1,79 @@
 package io.confluent.examples.streams.microservices;
 
 import io.confluent.examples.streams.avro.microservices.Order;
-import io.confluent.examples.streams.avro.microservices.OrderValidations;
-import io.confluent.examples.streams.avro.microservices.OrderValue;
+import io.confluent.examples.streams.avro.microservices.OrderValidation;
+import io.confluent.examples.streams.avro.microservices.ProductType;
 import io.confluent.kafka.streams.serdes.avro.SpecificAvroSerde;
 import org.apache.avro.specific.SpecificRecord;
+import org.apache.kafka.common.serialization.Serde;
+import org.apache.kafka.common.serialization.Serdes;
 
 import java.util.Collections;
+import java.util.HashMap;
+import java.util.Map;
 
+import static io.confluent.examples.streams.microservices.MicroserviceUtils.*;
 import static io.confluent.kafka.serializers.AbstractKafkaAvroSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG;
 
 public class Schemas {
+    private static final Map<String, Topic> allTopics = new HashMap<>();
+
+    public static class Topic<T, V> {
+        private String name;
+        private Serde<T> keySerde;
+        private Serde<V> valueSerde;
+
+        public Topic(String name, Serde<T> keySerde, Serde<V> valueSerde) {
+            this.name = name;
+            this.keySerde = keySerde;
+            this.valueSerde = valueSerde;
+            allTopics.put(name, this);
+        }
+
+        public Serde<T> keySerde() {
+            return keySerde;
+        }
+
+        public Serde<V> valueSerde() {
+            return valueSerde;
+        }
+
+        public String name() {
+            return name;
+        }
+
+        public String toString() {
+            return name;
+        }
+
+    }
 
     public static class Topics {
-        public static final String ORDERS = "orders";
-        public static final String ORDER_VALIDATIONS = "order-validations";
-        public static final String WAREHOUSE_INVENTORY = "warehouse-inventory";
-    }
+        public static Topic<Long, Order> ORDERS;
+        public static Topic<ProductType, Integer> WAREHOUSE_INVENTORY;
+        public static Topic<Long, OrderValidation> ORDER_VALIDATIONS;
+        static {
+            createTopics();
+        }
 
-    public static class SerdeBuilders {
-        public static final SchemaBuilder<Order> ORDERS = new SchemaBuilder<>();
-        public static final SchemaBuilder<OrderValidations> ORDER_VALIDATIONS = new SchemaBuilder<>();
-        public static final SchemaBuilder<OrderValue> ORDER_VALUE = new SchemaBuilder<>();
-    }
-
-    public static class SchemaBuilder<T extends SpecificRecord> {
-        public SpecificAvroSerde<T> serde(String schemaRegistryUrl){
-            SpecificAvroSerde<T> serde = new SpecificAvroSerde<>();
-            serde.configure(Collections.singletonMap(SCHEMA_REGISTRY_URL_CONFIG, schemaRegistryUrl), false);
-            return serde;
+        private static void createTopics() {
+            ORDERS = new Topic("orders", Serdes.Long(), new SpecificAvroSerde<Order>());
+            ORDER_VALIDATIONS = new Topic("order-validations", Serdes.Long(), new SpecificAvroSerde<OrderValidation>());
+            WAREHOUSE_INVENTORY = new Topic("warehouse-inventory", new ProductTypeSerde(), Serdes.Integer());
         }
     }
 
+    public static void configureSerdesWithSchemaRegistryUrl(String url) {
+        Topics.createTopics(); //wipe cached schema registry
+        for (Topic topic : allTopics.values()) {
+            configure(topic.keySerde(), url);
+            configure(topic.valueSerde(), url);
+        }
+    }
 
+    private static void configure(Serde serde, String url) {
+        if (serde instanceof SpecificAvroSerde) {
+            serde.configure(Collections.singletonMap(SCHEMA_REGISTRY_URL_CONFIG, url), false);
+        }
+    }
 }

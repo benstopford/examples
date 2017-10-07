@@ -6,6 +6,8 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.kstream.*;
 
+import static io.confluent.examples.streams.microservices.Schemas.*;
+
 public class FraudService {
     public static final String FRAUD_SERVICE_APP_ID = "fraud-service";
     public static final String DEFAULT_BOOTSTRAP_SERVERS = "localhost:9092";
@@ -13,30 +15,27 @@ public class FraudService {
     public static final int FRAUD_LIMIT = 2000;
 
 
-    KafkaStreams startService(String bootstrapServers, String schemaRegistryUrl) {
-        KafkaStreams streams = processOrders(bootstrapServers, schemaRegistryUrl, "/tmp/kafka-streams");
+    KafkaStreams startService(String bootstrapServers) {
+        KafkaStreams streams = processOrders(bootstrapServers, "/tmp/kafka-streams");
         streams.cleanUp(); //don't do this in prod as it clears your state stores
         streams.start();
         return streams;
     }
 
     private KafkaStreams processOrders(final String bootstrapServers,
-                                       final String schemaRegistryUrl,
                                        final String stateDir) {
 
-        SpecificAvroSerde<Order> orderSerdes = Schemas.SerdeBuilders.ORDERS.serde(schemaRegistryUrl);
-        SpecificAvroSerde<OrderValidations> orderValidationsSerdes = Schemas.SerdeBuilders.ORDER_VALIDATIONS.serde(schemaRegistryUrl);
 
         //Latch onto instances of the orders and inventory topics
         KStreamBuilder builder = new KStreamBuilder();
-        KStream<Long, Order> orders = builder.stream(Serdes.Long(), orderSerdes, Schemas.Topics.ORDERS);
+        KStream<Long, Order> orders = builder.stream(Topics.ORDERS.keySerde(), Topics.ORDERS.valueSerde(), Topics.ORDERS.name());
 
         //The following steps could be written as a single statement but we split each step out for clarity
 
         //Create a lookup table for the total value of orders in a window
         KTable<Windowed<Long>, Double> totalsByCustomerTable = orders
                 .filter((id, order) -> OrderType.CREATED.equals(order.getState()))
-                .groupBy((id, order) -> order.getCustomerId(), Serdes.Long(), orderSerdes)
+                .groupBy((id, order) -> order.getCustomerId(), Topics.ORDERS.keySerde(), Topics.ORDERS.valueSerde())
                 .aggregate(
                         () -> 0D,
                         (custId, order, total) -> total + order.getQuantity() * order.getPrice(),
@@ -54,17 +53,17 @@ public class FraudService {
         //Join the orders to the table to include the total-value
         KStream<Long, OrderValue> orderAndAmountByCust = ordersByCustId
                 .join(totalsByCustomer, OrderValue::new
-                        , JoinWindows.of(3000 * 1000L), Serdes.Long(), orderSerdes, Serdes.Double());
+                        , JoinWindows.of(3000 * 1000L), Topics.ORDERS.keySerde(), Topics.ORDERS.valueSerde(), Serdes.Double());
 
         //Branch anything over $2000 as a fraud check Fail
         orderAndAmountByCust.branch((id, orderValue) -> orderValue.getValue() >= FRAUD_LIMIT)[0]
-                .mapValues((orderValue) -> new OrderValidations(orderValue.getOrder().getId(), OrderValidationType.FRAUD_CHECK, OrderValidationResult.FAIL))
-                .to(Serdes.Long(), orderValidationsSerdes, Schemas.Topics.ORDER_VALIDATIONS);
+                .mapValues((orderValue) -> new OrderValidation(orderValue.getOrder().getId(), OrderValidationType.FRAUD_CHECK, OrderValidationResult.FAIL))
+                .to(Topics.ORDER_VALIDATIONS.keySerde(), Topics.ORDER_VALIDATIONS.valueSerde(), Topics.ORDER_VALIDATIONS.name());
 
         //Branch anything under $2000 as a fraud check Pass
         orderAndAmountByCust.branch((id, orderValue) -> orderValue.getValue() < FRAUD_LIMIT)[0]
-                .mapValues((orderValue) -> new OrderValidations(orderValue.getOrder().getId(), OrderValidationType.FRAUD_CHECK, OrderValidationResult.PASS))
-                .to(Serdes.Long(), orderValidationsSerdes, Schemas.Topics.ORDER_VALIDATIONS);
+                .mapValues((orderValue) -> new OrderValidation(orderValue.getOrder().getId(), OrderValidationType.FRAUD_CHECK, OrderValidationResult.PASS))
+                .to(Topics.ORDER_VALIDATIONS.keySerde(), Topics.ORDER_VALIDATIONS.valueSerde(), Topics.ORDER_VALIDATIONS.name());
 
         return new KafkaStreams(builder, MicroserviceUtils.streamsConfig(bootstrapServers, stateDir, FRAUD_SERVICE_APP_ID));
     }
@@ -81,7 +80,8 @@ public class FraudService {
 
         System.out.println("Connecting to Kafka cluster via bootstrap servers " + bootstrapServers);
         System.out.println("Connecting to Confluent schema registry at " + schemaRegistryUrl);
-        final KafkaStreams streams = new FraudService().startService(bootstrapServers, schemaRegistryUrl);
+        Schemas.configureSerdesWithSchemaRegistryUrl(schemaRegistryUrl);
+        final KafkaStreams streams = new FraudService().startService(bootstrapServers);
 
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
             try {

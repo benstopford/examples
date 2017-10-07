@@ -2,8 +2,9 @@ package io.confluent.examples.streams.microservices;
 
 import io.confluent.examples.streams.avro.microservices.Order;
 import io.confluent.examples.streams.avro.microservices.OrderType;
-import io.confluent.examples.streams.avro.microservices.OrderValidations;
+import io.confluent.examples.streams.avro.microservices.OrderValidation;
 import io.confluent.examples.streams.avro.microservices.ProductType;
+import io.confluent.examples.streams.microservices.Schemas.Topics;
 import io.confluent.kafka.streams.serdes.avro.SpecificAvroSerde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.KafkaStreams;
@@ -19,6 +20,7 @@ import org.apache.kafka.streams.state.Stores;
 
 import static io.confluent.examples.streams.avro.microservices.OrderValidationResult.FAIL;
 import static io.confluent.examples.streams.avro.microservices.OrderValidationResult.PASS;
+import static io.confluent.examples.streams.avro.microservices.OrderValidationResult.SCHEMA$;
 import static io.confluent.examples.streams.avro.microservices.OrderValidationType.INVENTORY_CHECK;
 import static io.confluent.examples.streams.microservices.MicroserviceUtils.ProductTypeSerde;
 
@@ -26,38 +28,35 @@ public class InventoryService {
     public static final String INVENTORY_SERVICE_APP_ID = "inventory-service";
     public static final String RESERVED_STOCK_STORE_NAME = "StoreOfReservedStock";
 
-    public static final ProductTypeSerde PRODUCT_TYPE_SERDE = new ProductTypeSerde();
     public static final String DEFAULT_BOOTSTRAP_SERVERS = "localhost:9092";
     public static final String DEFAULT_SCHEMA_REGISTRY_URL = "http://localhost:8081";
 
 
     //TODO next we need to decrement the reservation and the inventory when the order completes.
     //TODO orders could have multiple products, need order items in model
+    //TODO should probablly have timestamps on all objects, validFrom, validTo (snapshots need clock for this?)
 
-    KafkaStreams startService(String bootstrapServers, String schemaRegistryUrl) {
-        KafkaStreams streams = processOrders(bootstrapServers, schemaRegistryUrl, "/tmp/kafka-streams");
+    KafkaStreams startService(String bootstrapServers) {
+        KafkaStreams streams = processOrders(bootstrapServers, "/tmp/kafka-streams");
         streams.cleanUp(); //don't do this in prod as it clears your state stores
         streams.start();
         return streams;
     }
 
     private KafkaStreams processOrders(final String bootstrapServers,
-                                       final String schemaRegistryUrl,
                                        final String stateDir) {
 
-        SpecificAvroSerde<Order> orderSerdes = Schemas.SerdeBuilders.ORDERS.serde(schemaRegistryUrl);
-        SpecificAvroSerde<OrderValidations> orderValidationsSerdes = Schemas.SerdeBuilders.ORDER_VALIDATIONS.serde(schemaRegistryUrl);
 
         //Latch onto instances of the orders and inventory topics
         KStreamBuilder builder = new KStreamBuilder();
-        KStream<Long, Order> orders = builder.stream(Serdes.Long(), orderSerdes, Schemas.Topics.ORDERS);
-        KTable<ProductType, Integer> warehouseInventory = builder.table(PRODUCT_TYPE_SERDE, org.apache.kafka.common.serialization.Serdes.Integer(), Schemas.Topics.WAREHOUSE_INVENTORY);
+        KStream<Long, Order> orders = builder.stream(Topics.ORDERS.keySerde(), Topics.ORDERS.valueSerde(), Topics.ORDERS.name());
+        KTable<ProductType, Integer> warehouseInventory = builder.table(Topics.WAREHOUSE_INVENTORY.keySerde(), Topics.WAREHOUSE_INVENTORY.valueSerde(), Topics.WAREHOUSE_INVENTORY.name());
 
 
         //Create a store to reserve inventory whilst the order is processed.
         //This will be prepopulated from Kafka before the service starts processing
         StateStoreSupplier reservedStock = Stores.create(RESERVED_STOCK_STORE_NAME)
-                .withKeys(PRODUCT_TYPE_SERDE).withValues(org.apache.kafka.common.serialization.Serdes.Long())
+                .withKeys(Topics.WAREHOUSE_INVENTORY.keySerde()).withValues(org.apache.kafka.common.serialization.Serdes.Long())
                 .persistent().build();
         builder.addStateStore(reservedStock);
 
@@ -73,20 +72,20 @@ public class InventoryService {
 
         //Join Orders to Inventory so we will be able to compare each order to how much is in stock
         KStream<ProductType, KeyValue<Order, Integer>> ordersWithInventory = newlyCreatedOrders
-                .join(warehouseInventory, KeyValue::new, PRODUCT_TYPE_SERDE, orderSerdes);
+                .join(warehouseInventory, KeyValue::new, Topics.WAREHOUSE_INVENTORY.keySerde(), Topics.ORDERS.valueSerde());
 
         //Validate the order based on how much stock we have both in the warehouse
         // inventory and the local store of reserved orders
-        KStream<Long, OrderValidations> validatedOrders = ordersWithInventory
+        KStream<Long, OrderValidation> validatedOrders = ordersWithInventory
                 .transform(InventoryValidator::new, RESERVED_STOCK_STORE_NAME);
 
         //Push the result into the Order Validations topic
-        validatedOrders.to(Serdes.Long(), orderValidationsSerdes, Schemas.Topics.ORDER_VALIDATIONS);
+        validatedOrders.to(Topics.ORDER_VALIDATIONS.keySerde(), Topics.ORDER_VALIDATIONS.valueSerde(), Topics.ORDER_VALIDATIONS.name());
 
         return new KafkaStreams(builder, MicroserviceUtils.streamsConfig(bootstrapServers, stateDir, INVENTORY_SERVICE_APP_ID));
     }
 
-    private static class InventoryValidator implements Transformer<ProductType, KeyValue<Order, Integer>, KeyValue<Long, OrderValidations>> {
+    private static class InventoryValidator implements Transformer<ProductType, KeyValue<Order, Integer>, KeyValue<Long, OrderValidation>> {
         private KeyValueStore<ProductType, Long> reservedStocksStore;
 
         @Override
@@ -96,8 +95,8 @@ public class InventoryService {
         }
 
         @Override
-        public KeyValue<Long, OrderValidations> transform(final ProductType productId, final KeyValue<Order, Integer> orderAndStock) {
-            OrderValidations validated;
+        public KeyValue<Long, OrderValidation> transform(final ProductType productId, final KeyValue<Order, Integer> orderAndStock) {
+            OrderValidation validated;
             Order order = orderAndStock.key;
             Integer warehouseStockCount = orderAndStock.value;
 
@@ -107,9 +106,9 @@ public class InventoryService {
             //If there is enough stock available (considering both warehouse inventory and reserved stock) validate the order
             if (warehouseStockCount - reserved - order.getQuantity() >= 0) {
                 reservedStocksStore.put(order.getProduct(), reserved + order.getQuantity());
-                validated = new OrderValidations(order.getId(), INVENTORY_CHECK, PASS);
+                validated = new OrderValidation(order.getId(), INVENTORY_CHECK, PASS);
             } else {
-                validated = new OrderValidations(order.getId(), INVENTORY_CHECK, FAIL);
+                validated = new OrderValidation(order.getId(), INVENTORY_CHECK, FAIL);
             }
 
             System.out.println("Order set to " + order.getState() + " for product " + order.getProduct() + " as reserved count is " + reserved + " and stock count is " + warehouseStockCount + "and order amount is " + order.getQuantity());
@@ -117,7 +116,7 @@ public class InventoryService {
         }
 
         @Override
-        public KeyValue<Long, OrderValidations> punctuate(long timestamp) {
+        public KeyValue<Long, OrderValidation> punctuate(long timestamp) {
             return null;
         }
 
@@ -137,7 +136,8 @@ public class InventoryService {
 
         System.out.println("Connecting to Kafka cluster via bootstrap servers " + bootstrapServers);
         System.out.println("Connecting to Confluent schema registry at " + schemaRegistryUrl);
-        final KafkaStreams streams = new InventoryService().startService(bootstrapServers, schemaRegistryUrl);
+        Schemas.configureSerdesWithSchemaRegistryUrl(schemaRegistryUrl);
+        final KafkaStreams streams = new InventoryService().startService(bootstrapServers);
 
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
             try {

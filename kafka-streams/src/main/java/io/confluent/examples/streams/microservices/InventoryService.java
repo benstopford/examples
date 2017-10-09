@@ -21,7 +21,7 @@ import static io.confluent.examples.streams.avro.microservices.OrderValidationRe
 import static io.confluent.examples.streams.avro.microservices.OrderValidationResult.PASS;
 import static io.confluent.examples.streams.avro.microservices.OrderValidationType.INVENTORY_CHECK;
 
-public class InventoryService {
+public class InventoryService implements Service {
     public static final String INVENTORY_SERVICE_APP_ID = "inventory-service";
     public static final String RESERVED_STOCK_STORE_NAME = "store-of-reserved-stock";
     private KafkaStreams streams;
@@ -31,12 +31,16 @@ public class InventoryService {
     //TODO orders could have multiple products, need order items in model
     //TODO should probablly have timestamps on all objects, validFrom, validTo (snapshots need clock for this?)
 
-    //Next add validation that asserts inventory.warehouselocation.countrycode == order.deliveraddress.countrycode
-
-    void startService(String bootstrapServers) {
+    @Override
+    public void start(String bootstrapServers) {
         streams = processOrders(bootstrapServers, "/tmp/kafka-streams");
         streams.cleanUp(); //don't do this in prod as it clears your state stores
         streams.start();
+    }
+
+    @Override
+    public void stop() {
+        if (streams != null) streams.close();
     }
 
     private KafkaStreams processOrders(final String bootstrapServers,
@@ -122,7 +126,7 @@ public class InventoryService {
 
     public static void main(String[] args) throws Exception {
         InventoryService service = new InventoryService();
-        service.startService(MicroserviceUtils.initSchemaRegistryAndGetBootstrapServers(args));
+        service.start(MicroserviceUtils.initSchemaRegistryAndGetBootstrapServers(args));
 
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
             try {

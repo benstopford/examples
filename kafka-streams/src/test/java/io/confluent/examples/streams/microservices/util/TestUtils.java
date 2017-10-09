@@ -1,5 +1,6 @@
 package io.confluent.examples.streams.microservices.util;
 
+import io.confluent.examples.streams.avro.microservices.Order;
 import io.confluent.examples.streams.avro.microservices.OrderValidation;
 import io.confluent.examples.streams.kafka.EmbeddedSingleNodeKafkaCluster;
 import io.confluent.examples.streams.microservices.Schemas;
@@ -39,6 +40,7 @@ public class TestUtils {
     }
 
 
+    //TODO we can refactor the next two methods into one
     public static List<OrderValidation> readOrderValidations(int numberToRead, String bootstrapServers) throws InterruptedException {
         Properties consumerConfig = new Properties();
         consumerConfig.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
@@ -62,6 +64,32 @@ public class TestUtils {
         consumer.close();
         return actualValues;
     }
+
+    public static List<Order> readOrders(int numberToRead, String bootstrapServers) throws InterruptedException {
+        Properties consumerConfig = new Properties();
+        consumerConfig.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
+        consumerConfig.put(ConsumerConfig.GROUP_ID_CONFIG, "inventory-orders-test-reader");
+        consumerConfig.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
+
+
+        KafkaConsumer<Long, Order> consumer = new KafkaConsumer(consumerConfig,
+                Schemas.Topics.ORDERS.keySerde().deserializer(),
+                Schemas.Topics.ORDERS.valueSerde().deserializer());
+        consumer.subscribe(singletonList(Schemas.Topics.ORDERS.name()));
+
+        List<Order> actualValues = new ArrayList<>();
+        org.apache.kafka.test.TestUtils.waitForCondition(() -> {
+            ConsumerRecords<Long, Order> records = consumer.poll(100);
+            for (ConsumerRecord<Long, Order> record : records) {
+                System.out.println("Got order "+record.value());
+                actualValues.add(record.value());
+            }
+            return actualValues.size() == numberToRead;
+        }, 20000, "Timed out reading orders. Expected "+ numberToRead + " but got "+ actualValues.size());
+        consumer.close();
+        return actualValues;
+    }
+
 
     public static Properties propsWith(KeyValue... props){
         Properties properties = new Properties();

@@ -24,14 +24,14 @@ import static io.confluent.examples.streams.avro.microservices.OrderValidationTy
 import static io.confluent.examples.streams.microservices.Schemas.Topics;
 import static java.util.Collections.singletonList;
 
-public class OrderDetailsValidationService {
+public class OrderDetailsValidationService implements Service {
     public static final String CONSUMER_GROUP_ID = "OrderValidationService";
     private KafkaConsumer<Long, Order> consumer;
     private KafkaProducer<Long, OrderValidation> producer;
     private ExecutorService executorService = Executors.newSingleThreadExecutor();
     private boolean running = true;
 
-
+    @Override
     public void start(String bootstrapServers) {
         executorService.execute(() -> startService(bootstrapServers));
         System.out.println(getClass().getName() + " was started");
@@ -106,6 +106,7 @@ public class OrderDetailsValidationService {
             consumer.close();
     }
 
+    @Override
     public void stop() {
         running = false;
         try {

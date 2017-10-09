@@ -2,7 +2,7 @@
 {"namespace": "io.confluent.examples.streams.avro.microservices",
  "type": "enum",
  "name": "OrderType",
- "symbols" : ["CREATED", "VALIDATED", "SHIPPED"]
+ "symbols" : ["CREATED", "VALIDATED", "FAILED", "SHIPPED"]
 },
 {"namespace": "io.confluent.examples.streams.avro.microservices",
  "type": "enum",

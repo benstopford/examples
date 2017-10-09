@@ -61,7 +61,7 @@ public class FraudServiceTest extends TestUtils {
 
 
         //When
-        fraudService.startService(CLUSTER.bootstrapServers());
+        fraudService.start(CLUSTER.bootstrapServers());
 
         //Then the final order for Jumpers should have been 'rejected' as it's out of stock
         expected = asList(

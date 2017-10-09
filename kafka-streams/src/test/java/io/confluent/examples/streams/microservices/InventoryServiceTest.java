@@ -60,7 +60,7 @@ public class InventoryServiceTest extends TestUtils {
 
 
         //When
-        orderService.startService(CLUSTER.bootstrapServers());
+        orderService.start(CLUSTER.bootstrapServers());
 
 
         //Then the final order for Jumpers should have been 'rejected' as it's out of stock

@@ -4,7 +4,6 @@ import io.confluent.examples.streams.avro.microservices.Order;
 import io.confluent.examples.streams.avro.microservices.OrderValidation;
 import io.confluent.examples.streams.avro.microservices.ProductType;
 import io.confluent.kafka.streams.serdes.avro.SpecificAvroSerde;
-import org.apache.avro.specific.SpecificRecord;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 
@@ -12,7 +11,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
-import static io.confluent.examples.streams.microservices.MicroserviceUtils.*;
+import static io.confluent.examples.streams.microservices.util.MicroserviceUtils.ProductTypeSerde;
 import static io.confluent.kafka.serializers.AbstractKafkaAvroSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG;
 
 public class Schemas {

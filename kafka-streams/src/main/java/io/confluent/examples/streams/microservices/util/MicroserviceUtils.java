@@ -1,6 +1,7 @@
-package io.confluent.examples.streams.microservices;
+package io.confluent.examples.streams.microservices.util;
 
 import io.confluent.examples.streams.avro.microservices.ProductType;
+import io.confluent.examples.streams.microservices.Schemas;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serde;
@@ -12,11 +13,11 @@ import org.rocksdb.Options;
 import java.util.Map;
 import java.util.Properties;
 
-class MicroserviceUtils {
+public class MicroserviceUtils {
     public static final String DEFAULT_BOOTSTRAP_SERVERS = "localhost:9092";
     public static final String DEFAULT_SCHEMA_REGISTRY_URL = "http://localhost:8081";
 
-    static String parseArgs(String[] args) {
+    public static String initSchemaRegistryAndGetBootstrapServers(String[] args) {
         if (args.length > 2) {
             throw new IllegalArgumentException("usage: ... " +
                     "[<bootstrap.servers> (optional, default: " + DEFAULT_BOOTSTRAP_SERVERS + ")] " +
@@ -31,7 +32,7 @@ class MicroserviceUtils {
         return bootstrapServers;
     }
 
-    static Properties streamsConfig(String bootstrapServers, String stateDir, String appId) {
+    public static Properties streamsConfig(String bootstrapServers, String stateDir, String appId) {
         Properties config = new Properties();
         // Workaround for a known issue with RocksDB in environments where you have only 1 cpu core.
         config.put(StreamsConfig.ROCKSDB_CONFIG_SETTER_CLASS_CONFIG, CustomRocksDBConfig.class);

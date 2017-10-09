@@ -4,6 +4,7 @@ import io.confluent.examples.streams.avro.microservices.Order;
 import io.confluent.examples.streams.avro.microservices.OrderType;
 import io.confluent.examples.streams.avro.microservices.OrderValidation;
 import io.confluent.examples.streams.avro.microservices.OrderValidationResult;
+import io.confluent.examples.streams.microservices.util.MicroserviceUtils;
 import org.apache.kafka.clients.consumer.*;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
@@ -24,8 +25,6 @@ import static io.confluent.examples.streams.microservices.Schemas.Topics;
 import static java.util.Collections.singletonList;
 
 public class OrderDetailsValidationService {
-    public static final String DEFAULT_BOOTSTRAP_SERVERS = "localhost:9092";
-    public static final String DEFAULT_SCHEMA_REGISTRY_URL = "http://localhost:8081";
     public static final String CONSUMER_GROUP_ID = "OrderValidationService";
     private KafkaConsumer<Long, Order> consumer;
     private KafkaProducer<Long, OrderValidation> producer;
@@ -127,20 +126,8 @@ public class OrderDetailsValidationService {
     }
 
     public static void main(String[] args) throws Exception {
-        if (args.length > 2) {
-            throw new IllegalArgumentException("usage: ... " +
-                    "[<bootstrap.servers> (optional, default: " + DEFAULT_BOOTSTRAP_SERVERS + ")] " +
-                    "[<schema.registry.url> (optional, default: " + DEFAULT_SCHEMA_REGISTRY_URL + ")] ");
-        }
-        final String bootstrapServers = args.length > 1 ? args[1] : "localhost:9092";
-        final String schemaRegistryUrl = args.length > 2 ? args[2] : "http://localhost:8081";
-
-        System.out.println("Connecting to Kafka cluster via bootstrap servers " + bootstrapServers);
-        System.out.println("Connecting to Confluent schema registry at " + schemaRegistryUrl);
-        Schemas.configureSerdesWithSchemaRegistryUrl(schemaRegistryUrl);
-
         OrderDetailsValidationService service = new OrderDetailsValidationService();
-        service.startService(bootstrapServers);
+        service.startService(MicroserviceUtils.initSchemaRegistryAndGetBootstrapServers(args));
 
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
             try {

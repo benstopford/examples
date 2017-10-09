@@ -5,6 +5,7 @@ import io.confluent.examples.streams.avro.microservices.OrderType;
 import io.confluent.examples.streams.avro.microservices.OrderValidation;
 import io.confluent.examples.streams.avro.microservices.ProductType;
 import io.confluent.examples.streams.microservices.Schemas.Topics;
+import io.confluent.examples.streams.microservices.util.MicroserviceUtils;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.kstream.KStream;
@@ -40,7 +41,6 @@ public class InventoryService {
 
     private KafkaStreams processOrders(final String bootstrapServers,
                                        final String stateDir) {
-
 
         //Latch onto instances of the orders and inventory topics
         KStreamBuilder builder = new KStreamBuilder();
@@ -122,7 +122,7 @@ public class InventoryService {
 
     public static void main(String[] args) throws Exception {
         InventoryService service = new InventoryService();
-        service.startService(MicroserviceUtils.parseArgs(args));
+        service.startService(MicroserviceUtils.initSchemaRegistryAndGetBootstrapServers(args));
 
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
             try {

@@ -1,18 +1,22 @@
 package io.confluent.examples.streams.microservices;
 
-import io.confluent.examples.streams.avro.microservices.*;
+import io.confluent.examples.streams.avro.microservices.Order;
+import io.confluent.examples.streams.avro.microservices.OrderType;
+import io.confluent.examples.streams.avro.microservices.OrderValidation;
+import io.confluent.examples.streams.avro.microservices.OrderValue;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.kstream.*;
 
-import static io.confluent.examples.streams.microservices.MicroserviceUtils.parseArgs;
-import static io.confluent.examples.streams.microservices.MicroserviceUtils.streamsConfig;
+import static io.confluent.examples.streams.avro.microservices.OrderValidationResult.FAIL;
+import static io.confluent.examples.streams.avro.microservices.OrderValidationResult.PASS;
+import static io.confluent.examples.streams.avro.microservices.OrderValidationType.FRAUD_CHECK;
 import static io.confluent.examples.streams.microservices.Schemas.Topics;
+import static io.confluent.examples.streams.microservices.util.MicroserviceUtils.initSchemaRegistryAndGetBootstrapServers;
+import static io.confluent.examples.streams.microservices.util.MicroserviceUtils.streamsConfig;
 
 public class FraudService {
     public static final String FRAUD_SERVICE_APP_ID = "fraud-service";
-    public static final String DEFAULT_BOOTSTRAP_SERVERS = "localhost:9092";
-    public static final String DEFAULT_SCHEMA_REGISTRY_URL = "http://localhost:8081";
     public static final int FRAUD_LIMIT = 2000;
     private KafkaStreams streams;
 
@@ -26,7 +30,6 @@ public class FraudService {
 
     private KafkaStreams processOrders(final String bootstrapServers,
                                        final String stateDir) {
-
 
         //Latch onto instances of the orders and inventory topics
         KStreamBuilder builder = new KStreamBuilder();
@@ -53,18 +56,18 @@ public class FraudService {
         KStream<Long, Order> ordersByCustId = orders.selectKey((id, order) -> order.getCustomerId());
 
         //Join the orders to the table to include the total-value
-        KStream<Long, OrderValue> orderAndAmountByCust = ordersByCustId
+        KStream<Long, OrderValue> orderAndAmount = ordersByCustId
                 .join(totalsByCustomer, OrderValue::new
                         , JoinWindows.of(3000 * 1000L), Topics.ORDERS.keySerde(), Topics.ORDERS.valueSerde(), Serdes.Double());
 
         //Branch anything over $2000 as a fraud check Fail
-        orderAndAmountByCust.branch((id, orderValue) -> orderValue.getValue() >= FRAUD_LIMIT)[0]
-                .mapValues((orderValue) -> new OrderValidation(orderValue.getOrder().getId(), OrderValidationType.FRAUD_CHECK, OrderValidationResult.FAIL))
+        orderAndAmount.branch((id, orderValue) -> orderValue.getValue() >= FRAUD_LIMIT)[0]
+                .mapValues((orderValue) -> new OrderValidation(orderValue.getOrder().getId(), FRAUD_CHECK, FAIL))
                 .to(Topics.ORDER_VALIDATIONS.keySerde(), Topics.ORDER_VALIDATIONS.valueSerde(), Topics.ORDER_VALIDATIONS.name());
 
         //Branch anything under $2000 as a fraud check Pass
-        orderAndAmountByCust.branch((id, orderValue) -> orderValue.getValue() < FRAUD_LIMIT)[0]
-                .mapValues((orderValue) -> new OrderValidation(orderValue.getOrder().getId(), OrderValidationType.FRAUD_CHECK, OrderValidationResult.PASS))
+        orderAndAmount.branch((id, orderValue) -> orderValue.getValue() < FRAUD_LIMIT)[0]
+                .mapValues((pair) -> new OrderValidation(pair.getOrder().getId(), FRAUD_CHECK, PASS))
                 .to(Topics.ORDER_VALIDATIONS.keySerde(), Topics.ORDER_VALIDATIONS.valueSerde(), Topics.ORDER_VALIDATIONS.name());
 
         return new KafkaStreams(builder, streamsConfig(bootstrapServers, stateDir, FRAUD_SERVICE_APP_ID));
@@ -72,7 +75,7 @@ public class FraudService {
 
 
     public static void main(String[] args) throws Exception {
-        final String bootstrapServers = parseArgs(args);
+        final String bootstrapServers = initSchemaRegistryAndGetBootstrapServers(args);
         FraudService service = new FraudService();
         service.startService(bootstrapServers);
 

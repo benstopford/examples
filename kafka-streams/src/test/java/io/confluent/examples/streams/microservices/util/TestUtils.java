@@ -10,6 +10,7 @@ import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.serialization.LongDeserializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
+import org.apache.kafka.streams.KeyValue;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -60,5 +61,13 @@ public class TestUtils {
         }, 20000, "Timed out reading orders.");
         consumer.close();
         return actualValues;
+    }
+
+    public static Properties propsWith(KeyValue... props){
+        Properties properties = new Properties();
+        for(KeyValue kv: props){
+            properties.put(kv.key, kv.value);
+        }
+        return properties;
     }
 }

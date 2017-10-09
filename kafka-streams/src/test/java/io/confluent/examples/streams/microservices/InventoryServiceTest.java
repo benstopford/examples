@@ -14,9 +14,11 @@ import org.junit.Test;
 
 import java.util.List;
 
-import static io.confluent.examples.streams.avro.microservices.OrderType.*;
-import static io.confluent.examples.streams.avro.microservices.ProductType.*;
-import static io.confluent.examples.streams.microservices.Schemas.*;
+import static io.confluent.examples.streams.avro.microservices.OrderType.CREATED;
+import static io.confluent.examples.streams.avro.microservices.ProductType.JUMPERS;
+import static io.confluent.examples.streams.avro.microservices.ProductType.UNDERPANTS;
+import static io.confluent.examples.streams.microservices.Schemas.Topic;
+import static io.confluent.examples.streams.microservices.Schemas.Topics;
 import static java.util.Arrays.asList;
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -81,7 +83,6 @@ public class InventoryServiceTest extends TestUtils {
         return IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(inventoryConsumerProperties(CLUSTER),
                 ProcessorStateManager.storeChangelogTopic(InventoryService.INVENTORY_SERVICE_APP_ID, InventoryService.RESERVED_STOCK_STORE_NAME), numberOfRecordsToWaitFor);
     }
-
 
     private void sendInventory(List<KeyValue<ProductType, Integer>> inventory, Topic<ProductType, Integer> topic) {
         KafkaProducer<ProductType, Integer> stockProducer = new KafkaProducer<>(producerConfig(CLUSTER), topic.keySerde().serializer(), Topics.WAREHOUSE_INVENTORY.valueSerde().serializer());

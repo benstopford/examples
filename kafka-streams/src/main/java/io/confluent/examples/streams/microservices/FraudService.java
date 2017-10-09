@@ -1,22 +1,24 @@
 package io.confluent.examples.streams.microservices;
 
 import io.confluent.examples.streams.avro.microservices.*;
-import io.confluent.kafka.streams.serdes.avro.SpecificAvroSerde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.kstream.*;
 
-import static io.confluent.examples.streams.microservices.Schemas.*;
+import static io.confluent.examples.streams.microservices.MicroserviceUtils.parseArgs;
+import static io.confluent.examples.streams.microservices.MicroserviceUtils.streamsConfig;
+import static io.confluent.examples.streams.microservices.Schemas.Topics;
 
 public class FraudService {
     public static final String FRAUD_SERVICE_APP_ID = "fraud-service";
     public static final String DEFAULT_BOOTSTRAP_SERVERS = "localhost:9092";
     public static final String DEFAULT_SCHEMA_REGISTRY_URL = "http://localhost:8081";
     public static final int FRAUD_LIMIT = 2000;
+    private KafkaStreams streams;
 
 
     KafkaStreams startService(String bootstrapServers) {
-        KafkaStreams streams = processOrders(bootstrapServers, "/tmp/kafka-streams");
+        streams = processOrders(bootstrapServers, "/tmp/kafka-streams");
         streams.cleanUp(); //don't do this in prod as it clears your state stores
         streams.start();
         return streams;
@@ -65,29 +67,24 @@ public class FraudService {
                 .mapValues((orderValue) -> new OrderValidation(orderValue.getOrder().getId(), OrderValidationType.FRAUD_CHECK, OrderValidationResult.PASS))
                 .to(Topics.ORDER_VALIDATIONS.keySerde(), Topics.ORDER_VALIDATIONS.valueSerde(), Topics.ORDER_VALIDATIONS.name());
 
-        return new KafkaStreams(builder, MicroserviceUtils.streamsConfig(bootstrapServers, stateDir, FRAUD_SERVICE_APP_ID));
+        return new KafkaStreams(builder, streamsConfig(bootstrapServers, stateDir, FRAUD_SERVICE_APP_ID));
     }
 
 
     public static void main(String[] args) throws Exception {
-        if (args.length > 2) {
-            throw new IllegalArgumentException("usage: ... " +
-                    "[<bootstrap.servers> (optional, default: " + DEFAULT_BOOTSTRAP_SERVERS + ")] " +
-                    "[<schema.registry.url> (optional, default: " + DEFAULT_SCHEMA_REGISTRY_URL + ")] ");
-        }
-        final String bootstrapServers = args.length > 1 ? args[1] : "localhost:9092";
-        final String schemaRegistryUrl = args.length > 2 ? args[2] : "http://localhost:8081";
-
-        System.out.println("Connecting to Kafka cluster via bootstrap servers " + bootstrapServers);
-        System.out.println("Connecting to Confluent schema registry at " + schemaRegistryUrl);
-        Schemas.configureSerdesWithSchemaRegistryUrl(schemaRegistryUrl);
-        final KafkaStreams streams = new FraudService().startService(bootstrapServers);
+        final String bootstrapServers = parseArgs(args);
+        FraudService service = new FraudService();
+        service.startService(bootstrapServers);
 
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
             try {
-                streams.close();
+                service.stop();
             } catch (Exception ignored) {
             }
         }));
+    }
+
+    public void stop() {
+        if(streams != null) streams.close();
     }
 }

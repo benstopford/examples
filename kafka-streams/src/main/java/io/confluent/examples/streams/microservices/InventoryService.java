@@ -5,8 +5,6 @@ import io.confluent.examples.streams.avro.microservices.OrderType;
 import io.confluent.examples.streams.avro.microservices.OrderValidation;
 import io.confluent.examples.streams.avro.microservices.ProductType;
 import io.confluent.examples.streams.microservices.Schemas.Topics;
-import io.confluent.kafka.streams.serdes.avro.SpecificAvroSerde;
-import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.kstream.KStream;
@@ -20,27 +18,24 @@ import org.apache.kafka.streams.state.Stores;
 
 import static io.confluent.examples.streams.avro.microservices.OrderValidationResult.FAIL;
 import static io.confluent.examples.streams.avro.microservices.OrderValidationResult.PASS;
-import static io.confluent.examples.streams.avro.microservices.OrderValidationResult.SCHEMA$;
 import static io.confluent.examples.streams.avro.microservices.OrderValidationType.INVENTORY_CHECK;
-import static io.confluent.examples.streams.microservices.MicroserviceUtils.ProductTypeSerde;
 
 public class InventoryService {
     public static final String INVENTORY_SERVICE_APP_ID = "inventory-service";
-    public static final String RESERVED_STOCK_STORE_NAME = "StoreOfReservedStock";
-
-    public static final String DEFAULT_BOOTSTRAP_SERVERS = "localhost:9092";
-    public static final String DEFAULT_SCHEMA_REGISTRY_URL = "http://localhost:8081";
+    public static final String RESERVED_STOCK_STORE_NAME = "store-of-reserved-stock";
+    private KafkaStreams streams;
 
 
     //TODO next we need to decrement the reservation and the inventory when the order completes.
     //TODO orders could have multiple products, need order items in model
     //TODO should probablly have timestamps on all objects, validFrom, validTo (snapshots need clock for this?)
 
-    KafkaStreams startService(String bootstrapServers) {
-        KafkaStreams streams = processOrders(bootstrapServers, "/tmp/kafka-streams");
+    //Next add validation that asserts inventory.warehouselocation.countrycode == order.deliveraddress.countrycode
+
+    void startService(String bootstrapServers) {
+        streams = processOrders(bootstrapServers, "/tmp/kafka-streams");
         streams.cleanUp(); //don't do this in prod as it clears your state stores
         streams.start();
-        return streams;
     }
 
     private KafkaStreams processOrders(final String bootstrapServers,
@@ -126,24 +121,18 @@ public class InventoryService {
     }
 
     public static void main(String[] args) throws Exception {
-        if (args.length > 2) {
-            throw new IllegalArgumentException("usage: ... " +
-                    "[<bootstrap.servers> (optional, default: " + DEFAULT_BOOTSTRAP_SERVERS + ")] " +
-                    "[<schema.registry.url> (optional, default: " + DEFAULT_SCHEMA_REGISTRY_URL + ")] ");
-        }
-        final String bootstrapServers = args.length > 1 ? args[1] : "localhost:9092";
-        final String schemaRegistryUrl = args.length > 2 ? args[2] : "http://localhost:8081";
-
-        System.out.println("Connecting to Kafka cluster via bootstrap servers " + bootstrapServers);
-        System.out.println("Connecting to Confluent schema registry at " + schemaRegistryUrl);
-        Schemas.configureSerdesWithSchemaRegistryUrl(schemaRegistryUrl);
-        final KafkaStreams streams = new InventoryService().startService(bootstrapServers);
+        InventoryService service = new InventoryService();
+        service.startService(MicroserviceUtils.parseArgs(args));
 
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
             try {
-                streams.close();
+                service.close();
             } catch (Exception ignored) {
             }
         }));
+    }
+
+    private void close() {
+        streams.close();
     }
 }

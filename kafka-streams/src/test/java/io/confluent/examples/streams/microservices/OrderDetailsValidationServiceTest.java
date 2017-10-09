@@ -6,8 +6,10 @@ import io.confluent.examples.streams.avro.microservices.OrderValidationResult;
 import io.confluent.examples.streams.avro.microservices.OrderValidationType;
 import io.confluent.examples.streams.kafka.EmbeddedSingleNodeKafkaCluster;
 import io.confluent.examples.streams.microservices.util.TestUtils;
+import kafka.server.KafkaConfig;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerRecord;
+import org.apache.kafka.streams.KeyValue;
 import org.junit.After;
 import org.junit.BeforeClass;
 import org.junit.ClassRule;
@@ -22,59 +24,49 @@ import static io.confluent.examples.streams.microservices.Schemas.Topics;
 import static java.util.Arrays.asList;
 import static org.assertj.core.api.Assertions.assertThat;
 
-public class FraudServiceTest extends TestUtils {
+public class OrderDetailsValidationServiceTest extends TestUtils {
 
     @ClassRule
-    public static final EmbeddedSingleNodeKafkaCluster CLUSTER = new EmbeddedSingleNodeKafkaCluster();
+    public static final EmbeddedSingleNodeKafkaCluster CLUSTER = new EmbeddedSingleNodeKafkaCluster(TestUtils.propsWith(
+            //Set transactions to work with a single kafka broker.
+            new KeyValue(KafkaConfig.TransactionsTopicReplicationFactorProp(), "1"),
+            new KeyValue(KafkaConfig.TransactionsTopicMinISRProp(), "1"),
+            new KeyValue(KafkaConfig.TransactionsTopicPartitionsProp(), "1")
+    ));
     private List<Order> orders;
     private List<OrderValidation> expected;
-    private FraudService fraudService;
+    private OrderDetailsValidationService orderValService;
 
 
     @BeforeClass
     public static void startKafkaCluster() throws Exception {
         CLUSTER.createTopic(Topics.ORDERS.name());
         CLUSTER.createTopic(Topics.ORDER_VALIDATIONS.name());
-        System.out.println("running with schema registry: "+CLUSTER.schemaRegistryUrl());
         Schemas.configureSerdesWithSchemaRegistryUrl(CLUSTER.schemaRegistryUrl());
     }
 
     @Test
-    public void shouldValidateWhetherOrderAmountExceedsFraudLimitOverWindow() throws Exception {
-
-        //TODO - add event time to this.
+    public void shouldPassValidOrder() throws Exception {
 
         //Given
-        fraudService = new FraudService();
+        orderValService = new OrderDetailsValidationService();
 
         orders = asList(
-                new Order(0L, 0L, CREATED, UNDERPANTS, 3, 5.00d),
-                new Order(1L, 0L, CREATED, JUMPERS, 1, 75.00d), //customer 0 => pass
-                new Order(2L, 1L, CREATED, JUMPERS, 1, 75.00d),
-                new Order(3L, 1L, CREATED, JUMPERS, 1, 75.00d),
-                new Order(4L, 1L, CREATED, JUMPERS, 50, 75.00d), //customer 1 => fail
-                new Order(5L, 2L, CREATED, JUMPERS, 1, 75.00d),
-                new Order(6L, 2L, CREATED, UNDERPANTS, 2000, 5.00d), //customer 2 => fail
-                new Order(7L, 3L, CREATED, UNDERPANTS, 1, 5.00d)  //customer 3 => pass
+                new Order(0L, 0L, CREATED, UNDERPANTS, 3, 5.00d), //should pass
+                new Order(1L, 0L, CREATED, JUMPERS, -1, 75.00d) //should fail
         );
         sendOrders(orders);
 
-
         //When
-        fraudService.startService(CLUSTER.bootstrapServers());
+        orderValService.start(CLUSTER.bootstrapServers());
+
 
         //Then the final order for Jumpers should have been 'rejected' as it's out of stock
         expected = asList(
-                new OrderValidation(0L, OrderValidationType.FRAUD_CHECK, OrderValidationResult.PASS),
-                new OrderValidation(1L, OrderValidationType.FRAUD_CHECK, OrderValidationResult.PASS),
-                new OrderValidation(2L, OrderValidationType.FRAUD_CHECK, OrderValidationResult.FAIL),
-                new OrderValidation(3L, OrderValidationType.FRAUD_CHECK, OrderValidationResult.FAIL),
-                new OrderValidation(4L, OrderValidationType.FRAUD_CHECK, OrderValidationResult.FAIL),
-                new OrderValidation(5L, OrderValidationType.FRAUD_CHECK, OrderValidationResult.FAIL),
-                new OrderValidation(6L, OrderValidationType.FRAUD_CHECK, OrderValidationResult.FAIL),
-                new OrderValidation(7L, OrderValidationType.FRAUD_CHECK, OrderValidationResult.PASS)
+                new OrderValidation(0L, OrderValidationType.ORDER_DETAILS_CHECK, OrderValidationResult.PASS),
+                new OrderValidation(1L, OrderValidationType.ORDER_DETAILS_CHECK, OrderValidationResult.FAIL)
         );
-        assertThat(TestUtils.readOrderValidations(8, CLUSTER.bootstrapServers())).isEqualTo(expected);
+        assertThat(TestUtils.readOrderValidations(2, CLUSTER.bootstrapServers())).isEqualTo(expected);
     }
 
     private void sendOrders(List<Order> orders) {
@@ -86,6 +78,6 @@ public class FraudServiceTest extends TestUtils {
 
     @After
     public void tearDown(){
-        fraudService.stop();
+        orderValService.stop();
     }
 }

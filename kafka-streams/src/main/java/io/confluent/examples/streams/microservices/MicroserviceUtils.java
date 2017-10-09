@@ -13,6 +13,23 @@ import java.util.Map;
 import java.util.Properties;
 
 class MicroserviceUtils {
+    public static final String DEFAULT_BOOTSTRAP_SERVERS = "localhost:9092";
+    public static final String DEFAULT_SCHEMA_REGISTRY_URL = "http://localhost:8081";
+
+    static String parseArgs(String[] args) {
+        if (args.length > 2) {
+            throw new IllegalArgumentException("usage: ... " +
+                    "[<bootstrap.servers> (optional, default: " + DEFAULT_BOOTSTRAP_SERVERS + ")] " +
+                    "[<schema.registry.url> (optional, default: " + DEFAULT_SCHEMA_REGISTRY_URL + ")] ");
+        }
+        final String bootstrapServers = args.length > 1 ? args[1] : "localhost:9092";
+        final String schemaRegistryUrl = args.length > 2 ? args[2] : "http://localhost:8081";
+
+        System.out.println("Connecting to Kafka cluster via bootstrap servers " + bootstrapServers);
+        System.out.println("Connecting to Confluent schema registry at " + schemaRegistryUrl);
+        Schemas.configureSerdesWithSchemaRegistryUrl(schemaRegistryUrl);
+        return bootstrapServers;
+    }
 
     static Properties streamsConfig(String bootstrapServers, String stateDir, String appId) {
         Properties config = new Properties();

@@ -2,7 +2,7 @@
 {"namespace": "io.confluent.examples.streams.avro.microservices",
  "type": "enum",
  "name": "OrderValidationType",
- "symbols" : ["INVENTORY_CHECK", "FRAUD_CHECK", "DELIVER_LOCATION_CHECK"]
+ "symbols" : ["INVENTORY_CHECK", "FRAUD_CHECK", "ORDER_DETAILS_CHECK"]
 },
 {"namespace": "io.confluent.examples.streams.avro.microservices",
  "type": "enum",

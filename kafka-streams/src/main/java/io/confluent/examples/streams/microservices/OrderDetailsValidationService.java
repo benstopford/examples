@@ -34,7 +34,7 @@ public class OrderDetailsValidationService implements Service {
     @Override
     public void start(String bootstrapServers) {
         executorService.execute(() -> startService(bootstrapServers));
-        System.out.println(getClass().getName() + " was started");
+        System.out.println("Started Service " + getClass().getSimpleName());
     }
 
     private void startService(String bootstrapServers) {
@@ -51,12 +51,10 @@ public class OrderDetailsValidationService implements Service {
                 producer.beginTransaction();
                 for (ConsumerRecord<Long, Order> record : records) {
                     Order order = record.value();
-                    if (isValid(order))
-                        producer.send(result(order, PASS));
-                    else
-                        producer.send(result(order, FAIL));
-
-                    consumedOffsets.put(new TopicPartition(record.topic(), record.partition()), new OffsetAndMetadata(record.offset()));
+                    if (OrderType.CREATED.equals(order.getState())) {
+                        producer.send(result(order, isValid(order) ? PASS : FAIL));
+                        recordOffset(consumedOffsets, record);
+                    }
                 }
                 producer.sendOffsetsToTransaction(consumedOffsets, CONSUMER_GROUP_ID);
                 producer.commitTransaction();
@@ -64,6 +62,10 @@ public class OrderDetailsValidationService implements Service {
         } finally {
             close();
         }
+    }
+
+    private void recordOffset(Map<TopicPartition, OffsetAndMetadata> consumedOffsets, ConsumerRecord<Long, Order> record) {
+        consumedOffsets.put(new TopicPartition(record.topic(), record.partition()), new OffsetAndMetadata(record.offset()));
     }
 
     private ProducerRecord<Long, OrderValidation> result(Order order, OrderValidationResult passOrFail) {

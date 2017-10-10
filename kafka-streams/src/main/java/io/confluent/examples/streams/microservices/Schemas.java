@@ -15,21 +15,20 @@ import static io.confluent.examples.streams.microservices.util.MicroserviceUtils
 import static io.confluent.kafka.serializers.AbstractKafkaAvroSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG;
 
 public class Schemas {
-    private static final Map<String, Topic> allTopics = new HashMap<>();
 
-    public static class Topic<T, V> {
+    public static class Topic<K, V> {
         private String name;
-        private Serde<T> keySerde;
+        private Serde<K> keySerde;
         private Serde<V> valueSerde;
 
-        public Topic(String name, Serde<T> keySerde, Serde<V> valueSerde) {
+        public Topic(String name, Serde<K> keySerde, Serde<V> valueSerde) {
             this.name = name;
             this.keySerde = keySerde;
             this.valueSerde = valueSerde;
-            allTopics.put(name, this);
+            Topics.ALL.put(name, this);
         }
 
-        public Serde<T> keySerde() {
+        public Serde<K> keySerde() {
             return keySerde;
         }
 
@@ -44,10 +43,10 @@ public class Schemas {
         public String toString() {
             return name;
         }
-
     }
 
     public static class Topics {
+        public static Map<String, Topic> ALL = new HashMap<>();
         public static Topic<Long, Order> ORDERS;
         public static Topic<ProductType, Integer> WAREHOUSE_INVENTORY;
         public static Topic<Long, OrderValidation> ORDER_VALIDATIONS;
@@ -64,7 +63,7 @@ public class Schemas {
 
     public static void configureSerdesWithSchemaRegistryUrl(String url) {
         Topics.createTopics(); //wipe cached schema registry
-        for (Topic topic : allTopics.values()) {
+        for (Topic topic : Topics.ALL.values()) {
             configure(topic.keySerde(), url);
             configure(topic.valueSerde(), url);
         }

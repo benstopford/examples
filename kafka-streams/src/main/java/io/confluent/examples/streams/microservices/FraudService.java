@@ -26,6 +26,7 @@ public class FraudService implements Service {
         streams = processOrders(bootstrapServers, "/tmp/kafka-streams");
         streams.cleanUp(); //don't do this in prod as it clears your state stores
         streams.start();
+        System.out.println("Started Service " + getClass().getSimpleName());
     }
 
     private KafkaStreams processOrders(final String bootstrapServers,
@@ -33,20 +34,19 @@ public class FraudService implements Service {
 
         //Latch onto instances of the orders and inventory topics
         KStreamBuilder builder = new KStreamBuilder();
-        KStream<Long, Order> orders = builder.stream(ORDERS.keySerde(), ORDERS.valueSerde(), ORDERS.name());
+        KStream<Long, Order> orders = builder.stream(ORDERS.keySerde(), ORDERS.valueSerde(), ORDERS.name())
+                .filter((id, order) -> OrderType.CREATED.equals(order.getState()));
 
         //The following steps could be written as a single statement but we split each step out for clarity
 
         //Create a lookup table for the total value of orders in a window
         KTable<Windowed<Long>, Double> totalsByCustomerTable = orders
-                .filter((id, order) -> OrderType.CREATED.equals(order.getState()))
                 .groupBy((id, order) -> order.getCustomerId(), ORDERS.keySerde(), ORDERS.valueSerde())
                 .aggregate(
                         () -> 0D,
                         (custId, order, total) -> total + order.getQuantity() * order.getPrice(),
                         TimeWindows.of(60 * 1000L), //TODO - why doesn't it work if we make this big?
-                        Serdes.Double(),
-                        "total-order-value"); //TODO do we actually need the store?? How do you use this since it always has to be converted back to a stream to be useful (due to the window<key> problem)
+                        Serdes.Double());
 
         //Convert to a stream to remove the window from the key
         KStream<Long, Double> totalsByCustomer = totalsByCustomerTable
@@ -56,7 +56,7 @@ public class FraudService implements Service {
         KStream<Long, Order> ordersByCustId = orders.selectKey((id, order) -> order.getCustomerId());
 
         //Join the orders to the table to include the total-value
-        KStream<Long, OrderValue> orderAndAmount = ordersByCustId
+        KStream<Long, OrderValue> orderAndAmount = ordersByCustId  //TODO why does this create duplicates?
                 .join(totalsByCustomer, OrderValue::new
                         , JoinWindows.of(3000 * 1000L), ORDERS.keySerde(), ORDERS.valueSerde(), Serdes.Double());
 

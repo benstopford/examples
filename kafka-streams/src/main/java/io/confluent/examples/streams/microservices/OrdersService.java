@@ -27,12 +27,13 @@ public class OrdersService implements Service {
         streams = processOrders(bootstrapServers, "/tmp/kafka-streams");
         streams.cleanUp(); //don't do this in prod as it clears your state stores
         streams.start();
+        System.out.println("Started Service " + getClass().getSimpleName());
     }
 
     //TODO change validationresult.getpassed to something more explicit like validationresult
 
     private KafkaStreams processOrders(String bootstrapServers, String stateDir) {
-        final int numberOfRules = 3; //todo put into a ktable
+        final int numberOfRules = 3; //TODO put into a ktable
 
         KStreamBuilder builder = new KStreamBuilder();
         KStream<Long, OrderValidation> rules = builder.stream(ORDER_VALIDATIONS.keySerde(), ORDER_VALIDATIONS.valueSerde(), ORDER_VALIDATIONS.name());
@@ -48,7 +49,7 @@ public class OrdersService implements Service {
                         Serdes.Long()
                 )
                 .toStream((windowedKey, total) -> windowedKey.key()) //get rid of window
-                .filter((k, total) -> total >= numberOfRules) //TODO push this config into a global KTable.
+                .filter((k, total) -> total >= numberOfRules)
                 .join(orders, (id, order) -> newBuilder(order).setState(VALIDATED).build(), JoinWindows.of(3000 * 1000L), ORDERS.keySerde(), Serdes.Long(), ORDERS.valueSerde())
                 .to(ORDERS.keySerde(), ORDERS.valueSerde(), ORDERS.name());
 

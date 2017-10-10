@@ -4,13 +4,10 @@ import io.confluent.examples.streams.avro.microservices.Order;
 import io.confluent.examples.streams.avro.microservices.OrderValidation;
 import io.confluent.examples.streams.avro.microservices.OrderValidationResult;
 import io.confluent.examples.streams.avro.microservices.OrderValidationType;
-import io.confluent.examples.streams.kafka.EmbeddedSingleNodeKafkaCluster;
+import io.confluent.examples.streams.microservices.Schemas.Topics;
 import io.confluent.examples.streams.microservices.util.TestUtils;
-import org.apache.kafka.clients.producer.KafkaProducer;
-import org.apache.kafka.clients.producer.ProducerRecord;
 import org.junit.After;
 import org.junit.BeforeClass;
-import org.junit.ClassRule;
 import org.junit.Test;
 
 import java.util.List;
@@ -23,8 +20,6 @@ import static java.util.Arrays.asList;
 import static org.assertj.core.api.Assertions.assertThat;
 
 public class OrdersServiceTest extends TestUtils {
-    @ClassRule
-    public static final EmbeddedSingleNodeKafkaCluster CLUSTER = new EmbeddedSingleNodeKafkaCluster();
     private List<Order> orders;
     private List<OrderValidation> ruleResults;
     private OrdersService ordersService;
@@ -32,8 +27,8 @@ public class OrdersServiceTest extends TestUtils {
 
     @BeforeClass
     public static void startKafkaCluster() throws Exception {
-        CLUSTER.createTopic(Schemas.Topics.ORDERS.name());
-        CLUSTER.createTopic(Schemas.Topics.ORDER_VALIDATIONS.name());
+        CLUSTER.createTopic(Topics.ORDERS.name());
+        CLUSTER.createTopic(Topics.ORDER_VALIDATIONS.name());
         Schemas.configureSerdesWithSchemaRegistryUrl(CLUSTER.schemaRegistryUrl());
     }
 
@@ -62,8 +57,8 @@ public class OrdersServiceTest extends TestUtils {
         //When
         ordersService.start(CLUSTER.bootstrapServers());
 
-        //Then there should be 4 order messages in total (2 original, 2 new)
-        List<Order> finalOrders = TestUtils.readOrders(4, CLUSTER.bootstrapServers());
+
+        List<Order> finalOrders = TestUtils.read(Topics.ORDERS, 4, CLUSTER.bootstrapServers());
         assertThat(finalOrders.size()).isEqualTo(4);
 
         //And the first order should have been validated but the second should have failed
@@ -73,20 +68,6 @@ public class OrdersServiceTest extends TestUtils {
         );
     }
 
-    //TODO generify send methods
-    private void sendOrders(List<Order> orders) {
-        KafkaProducer<Long, Order> ordersProducer = new KafkaProducer(producerConfig(CLUSTER), Schemas.Topics.ORDERS.keySerde().serializer(), Schemas.Topics.ORDERS.valueSerde().serializer());
-        for (Order order : orders)
-            ordersProducer.send(new ProducerRecord(Schemas.Topics.ORDERS.name(), order.getId(), order));
-        ordersProducer.close();
-    }
-
-    private void sendOrderValuations(List<OrderValidation> orderValidations) {
-        KafkaProducer<Long, Order> ordersProducer = new KafkaProducer(producerConfig(CLUSTER), Schemas.Topics.ORDER_VALIDATIONS.keySerde().serializer(), Schemas.Topics.ORDER_VALIDATIONS.valueSerde().serializer());
-        for (OrderValidation ov : orderValidations)
-            ordersProducer.send(new ProducerRecord(Schemas.Topics.ORDER_VALIDATIONS.name(), ov.getOrderId(), ov));
-        ordersProducer.close();
-    }
 
     @After
     public void tearDown() {

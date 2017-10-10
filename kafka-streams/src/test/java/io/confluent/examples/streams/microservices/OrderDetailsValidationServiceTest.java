@@ -4,15 +4,9 @@ import io.confluent.examples.streams.avro.microservices.Order;
 import io.confluent.examples.streams.avro.microservices.OrderValidation;
 import io.confluent.examples.streams.avro.microservices.OrderValidationResult;
 import io.confluent.examples.streams.avro.microservices.OrderValidationType;
-import io.confluent.examples.streams.kafka.EmbeddedSingleNodeKafkaCluster;
 import io.confluent.examples.streams.microservices.util.TestUtils;
-import kafka.server.KafkaConfig;
-import org.apache.kafka.clients.producer.KafkaProducer;
-import org.apache.kafka.clients.producer.ProducerRecord;
-import org.apache.kafka.streams.KeyValue;
 import org.junit.After;
 import org.junit.BeforeClass;
-import org.junit.ClassRule;
 import org.junit.Test;
 
 import java.util.List;
@@ -26,13 +20,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 public class OrderDetailsValidationServiceTest extends TestUtils {
 
-    @ClassRule
-    public static final EmbeddedSingleNodeKafkaCluster CLUSTER = new EmbeddedSingleNodeKafkaCluster(TestUtils.propsWith(
-            //Set transactions to work with a single kafka broker.
-            new KeyValue(KafkaConfig.TransactionsTopicReplicationFactorProp(), "1"),
-            new KeyValue(KafkaConfig.TransactionsTopicMinISRProp(), "1"),
-            new KeyValue(KafkaConfig.TransactionsTopicPartitionsProp(), "1")
-    ));
     private List<Order> orders;
     private List<OrderValidation> expected;
     private OrderDetailsValidationService orderValService;
@@ -66,14 +53,7 @@ public class OrderDetailsValidationServiceTest extends TestUtils {
                 new OrderValidation(0L, OrderValidationType.ORDER_DETAILS_CHECK, OrderValidationResult.PASS),
                 new OrderValidation(1L, OrderValidationType.ORDER_DETAILS_CHECK, OrderValidationResult.FAIL)
         );
-        assertThat(TestUtils.readOrderValidations(2, CLUSTER.bootstrapServers())).isEqualTo(expected);
-    }
-
-    private void sendOrders(List<Order> orders) {
-        KafkaProducer<Long, Order> ordersProducer = new KafkaProducer(producerConfig(CLUSTER), Topics.ORDERS.keySerde().serializer(), Topics.ORDERS.valueSerde().serializer());
-        for (Order order : orders)
-            ordersProducer.send(new ProducerRecord(Topics.ORDERS.name(), order.getId(), order));
-        ordersProducer.close();
+        assertThat(TestUtils.read(Topics.ORDER_VALIDATIONS, 2, CLUSTER.bootstrapServers())).isEqualTo(expected);
     }
 
     @After

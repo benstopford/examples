@@ -4,13 +4,9 @@ import io.confluent.examples.streams.avro.microservices.Order;
 import io.confluent.examples.streams.avro.microservices.OrderValidation;
 import io.confluent.examples.streams.avro.microservices.OrderValidationResult;
 import io.confluent.examples.streams.avro.microservices.OrderValidationType;
-import io.confluent.examples.streams.kafka.EmbeddedSingleNodeKafkaCluster;
 import io.confluent.examples.streams.microservices.util.TestUtils;
-import org.apache.kafka.clients.producer.KafkaProducer;
-import org.apache.kafka.clients.producer.ProducerRecord;
 import org.junit.After;
 import org.junit.BeforeClass;
-import org.junit.ClassRule;
 import org.junit.Test;
 
 import java.util.List;
@@ -24,12 +20,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 public class FraudServiceTest extends TestUtils {
 
-    @ClassRule
-    public static final EmbeddedSingleNodeKafkaCluster CLUSTER = new EmbeddedSingleNodeKafkaCluster();
     private List<Order> orders;
     private List<OrderValidation> expected;
     private FraudService fraudService;
-
 
     @BeforeClass
     public static void startKafkaCluster() throws Exception {
@@ -59,7 +52,6 @@ public class FraudServiceTest extends TestUtils {
         );
         sendOrders(orders);
 
-
         //When
         fraudService.start(CLUSTER.bootstrapServers());
 
@@ -74,14 +66,7 @@ public class FraudServiceTest extends TestUtils {
                 new OrderValidation(6L, OrderValidationType.FRAUD_CHECK, OrderValidationResult.FAIL),
                 new OrderValidation(7L, OrderValidationType.FRAUD_CHECK, OrderValidationResult.PASS)
         );
-        assertThat(TestUtils.readOrderValidations(8, CLUSTER.bootstrapServers())).isEqualTo(expected);
-    }
-
-    private void sendOrders(List<Order> orders) {
-        KafkaProducer<Long, Order> ordersProducer = new KafkaProducer(producerConfig(CLUSTER), Topics.ORDERS.keySerde().serializer(), Topics.ORDERS.valueSerde().serializer());
-        for (Order order : orders)
-            ordersProducer.send(new ProducerRecord(Topics.ORDERS.name(), order.getId(), order));
-        ordersProducer.close();
+        assertThat(TestUtils.read(Topics.ORDER_VALIDATIONS, 8, CLUSTER.bootstrapServers())).isEqualTo(expected);
     }
 
     @After

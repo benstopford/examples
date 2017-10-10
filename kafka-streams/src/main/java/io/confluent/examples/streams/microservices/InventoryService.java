@@ -36,6 +36,7 @@ public class InventoryService implements Service {
         streams = processOrders(bootstrapServers, "/tmp/kafka-streams");
         streams.cleanUp(); //don't do this in prod as it clears your state stores
         streams.start();
+        System.out.println("Started Service " + getClass().getSimpleName());
     }
 
     @Override
@@ -110,7 +111,6 @@ public class InventoryService implements Service {
                 validated = new OrderValidation(order.getId(), INVENTORY_CHECK, FAIL);
             }
 
-            System.out.println("Order set to " + order.getState() + " for product " + order.getProduct() + " as reserved count is " + reserved + " and stock count is " + warehouseStockCount + "and order amount is " + order.getQuantity());
             return KeyValue.pair(validated.getOrderId(), validated);
         }
 

@@ -110,7 +110,7 @@ public class FraudService implements Service {
      * This approach attempts to do the whole thing as a single stream. We calculate the total value and keep it with the
      * order. It solves the duplicates problem. Unfortunately it doesn't work for a different reason: 'replaced' orders
      * (i.e. orders with the same customer id) get removed from the output stream by the aggregate. I can't find any
-     * way to preserve them.
+     * way to preserve them. see FraudServiceTest.shouldValidateWhetherOrderAmountExceedsFraudLimitOverWindow()
      */
     private KafkaStreams processOrdersV2(final String bootstrapServers,
                                          final String stateDir) {

@@ -14,7 +14,6 @@ import java.util.Iterator;
 import java.util.List;
 
 import static io.confluent.examples.streams.avro.microservices.OrderType.CREATED;
-import static io.confluent.examples.streams.avro.microservices.OrderType.VALIDATED;
 import static io.confluent.examples.streams.avro.microservices.OrderValidationResult.FAIL;
 import static io.confluent.examples.streams.avro.microservices.OrderValidationResult.PASS;
 import static io.confluent.examples.streams.avro.microservices.OrderValidationType.FRAUD_CHECK;
@@ -101,8 +100,12 @@ public class FraudServiceTest extends TestUtils {
         assertThat(records.count()).isEqualTo(1);
         assertThat(records.iterator().next().value()).isEqualTo(new OrderValidation(0L, FRAUD_CHECK, PASS));
 
+        //--again
+        Thread.sleep(2000);
+        System.out.println("*********Second shot***********");
+
         //Synthesise that order was validated
-        sendOrders(asList(new Order(0L, 0L, VALIDATED, UNDERPANTS, 3, -5.00d)));
+//        sendOrders(asList(new Order(0L, 0L, VALIDATED, UNDERPANTS, 3, -5.00d)));
 
         //send again
         sendOrders(asList(new Order(1L, 0L, CREATED, UNDERPANTS, 3, -5.00d)));
@@ -119,7 +122,7 @@ public class FraudServiceTest extends TestUtils {
         System.out.println("*********Third shot***********");
 
         //Synthesise that order was validated
-        sendOrders(asList(new Order(1L, 0L, VALIDATED, UNDERPANTS, 3, -5.00d)));
+//        sendOrders(asList(new Order(1L, 0L, VALIDATED, UNDERPANTS, 3, -5.00d)));
 
         //send again
         sendOrders(asList(new Order(2L, 0L, CREATED, UNDERPANTS, 3, -5.00d)));

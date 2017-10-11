@@ -16,6 +16,22 @@ import static io.confluent.examples.streams.microservices.Schemas.Topics.ORDER_V
 import static io.confluent.examples.streams.microservices.util.MicroserviceUtils.initSchemaRegistryAndGetBootstrapServers;
 import static io.confluent.examples.streams.microservices.util.MicroserviceUtils.streamsConfig;
 
+
+/**
+ * This service searches for potentially fraudulent transactions by calculating the total value of orders for a
+ * customer within a time period, then checks to see if this is over a configured limit.
+ * <p>
+ * i.e. if(SUM(order.value, 5Mins) > $5000) -> Fail else Pass
+ * <p>
+ * It turns out this is surprisingly tricky to do. I tried two different methods.
+ * <p>
+ * processOrdersV1 -> creates a table of the total value and then refers back to it. This doesn't work for two reason
+ * (a) the table gets updated after the order is processed so you get an incorrect result.
+ * (b) The change of key to customer id creates duplicates if there are multiple orders per customer.
+ * <p>
+ * processOrdersV2 -> tries to do it as a single stream, but orders are lost in the KTable as there is no way to
+ * attach directly to the changelog stream and ensure you get every update.
+ */
 public class FraudService implements Service {
     public static final String FRAUD_SERVICE_APP_ID = "fraud-service";
     public static final int FRAUD_LIMIT = 2000;
@@ -23,32 +39,25 @@ public class FraudService implements Service {
 
     @Override
     public void start(String bootstrapServers) {
-        streams = processOrders(bootstrapServers, "/tmp/kafka-streams");
+        streams = processOrdersV1(bootstrapServers, "/tmp/kafka-streams");
         streams.cleanUp(); //don't do this in prod as it clears your state stores
         streams.start();
         System.out.println("Started Service " + getClass().getSimpleName());
     }
 
-
     /**
-     * This test fails because the code creates duplicates. The problem is we're torn between two non-ideal situations.
-     * Either (a) we make the up table custId->total a KTable. In this case there is a race between creating this table
-     * and joining the table back to orders. As the table doesn't trigger we typically don't get any results at all with
-     * this method.
-     * <p>
-     * Alternatively we convert it to a stream. In this case the problem is more subtle. When a customer value is updated
-     * it updates the custId->total stream, but if we have multiple orders for the same customer all those orders orders
-     * will be triggered, not just the order that created it. So you get duplicate outputs. Since you've lost the context
-     * of which order triggered on that side, you can't do anything about it.
-     * <p>
-     * Probably the best solution is to use the processor API, although this is likely to have similar ordering issues.
-     * <p>
-     * Ahh. the answer is to compute the aggregate but keep the whole order inside the result. then you have a stream with
-     * both the current aggregated count and the value. then you never need to join back to the orders stream!! ha ha.
+     * This version almost works but it creates duplicates.
+     *
+     * Consider the test FraudServiceTest.thisCreatesDuplicates(). "Second Shot". After the second order we get 3 PASS's
+     * (rather than just one). Each of the two duplicates arise for different reasons.
+     * - The first duplicate is actually incorrect. The new order flows through the topology, joins to the not-yet-updated
+     * totalByCustomer record (which hasn't updated yet) and outputs an incorrect result (it's still a pass but it's technically incorrect)
+     * - The second duplicate comes when the totalsByCustomer is updated. This triggers the join again. What is somewhat
+     * surprising is this join creates two outputs, for both new order Pass(order1) and the original Pass(order0). I think what is
+     * happening is the join 'side' is switching to trigger  from the totalsByCustomer side, which then matches on
+     * all existing orders in the stream with the same customer id. This creates the second duplicate (of order0)
      */
-
-
-    private KafkaStreams processOrders(final String bootstrapServers,
+    private KafkaStreams processOrdersV1(final String bootstrapServers,
                                        final String stateDir) {
 
         //Latch onto instances of the orders and inventory topics
@@ -95,6 +104,52 @@ public class FraudService implements Service {
 
         return new KafkaStreams(builder, streamsConfig(bootstrapServers, stateDir, FRAUD_SERVICE_APP_ID));
     }
+
+    /**
+     * This approach attempts to do the whole thing as a single stream. We calculate the total value and keep it with the
+     * order. It solves the duplicates problem. Unfortunately it doesn't work for a different reason: 'replaced' orders
+     * (i.e. orders with the same customer id) get removed from the output stream by the aggregate. I can't find any
+     * way to preserve them.
+     */
+
+    private KafkaStreams processOrdersV2(final String bootstrapServers,
+                                         final String stateDir) {
+
+        //Latch onto instances of the orders and inventory topics
+        KStreamBuilder builder = new KStreamBuilder();
+        KStream<Long, Order> orders = builder.stream(ORDERS.keySerde(), ORDERS.valueSerde(), ORDERS.name())
+                .filter((id, order) -> OrderType.CREATED.equals(order.getState()));
+
+        //The following steps could be written as a single statement but we split each step out for clarity
+
+        //Create a lookup table for the total value of orders in a window
+        KTable<Windowed<Long>, OrderValue> aggregate = orders
+                .groupBy((id, order) -> order.getCustomerId(), ORDERS.keySerde(), ORDERS.valueSerde())
+                .aggregate(
+                        () -> new OrderValue(),
+                        (custId, order, orderValue) -> new OrderValue(order, orderValue.getValue() + order.getQuantity() * order.getPrice()),
+                        TimeWindows.of(60 * 1000L),
+                        Schemas.ORDER_VALUE_SERDE);
+
+        //Ditch the windowing
+        KStream<Long, OrderValue> ordersWithTotals = aggregate
+                .toStream((windowedKey, orderValue) -> windowedKey.key());
+
+
+        ordersWithTotals.print("ordersWithTotals");
+
+        //Now branch the stream into two, for pass and fail, based on whether the windowed total is over $2000
+        ordersWithTotals.branch((id, orderValue) -> orderValue.getValue() >= FRAUD_LIMIT)[0]
+                .mapValues((orderValue) -> new OrderValidation(orderValue.getOrder().getId(), FRAUD_CHECK, FAIL))
+                .to(ORDER_VALIDATIONS.keySerde(), ORDER_VALIDATIONS.valueSerde(), ORDER_VALIDATIONS.name());
+
+        ordersWithTotals.branch((id, orderValue) -> orderValue.getValue() < FRAUD_LIMIT)[0]
+                .mapValues((pair) -> new OrderValidation(pair.getOrder().getId(), FRAUD_CHECK, PASS))
+                .to(ORDER_VALIDATIONS.keySerde(), ORDER_VALIDATIONS.valueSerde(), ORDER_VALIDATIONS.name());
+
+        return new KafkaStreams(builder, streamsConfig(bootstrapServers, stateDir, FRAUD_SERVICE_APP_ID));
+    }
+
 
     public static void main(String[] args) throws Exception {
         final String bootstrapServers = initSchemaRegistryAndGetBootstrapServers(args);

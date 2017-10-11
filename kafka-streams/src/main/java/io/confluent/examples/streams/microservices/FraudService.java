@@ -122,7 +122,7 @@ public class FraudService implements Service {
 
         //The following steps could be written as a single statement but we split each step out for clarity
 
-        //Create a lookup table for the total value of orders in a window
+        //Create an aggregate of the total value by customer and hold it with the order.
         KTable<Windowed<Long>, OrderValue> aggregate = orders
                 .groupBy((id, order) -> order.getCustomerId(), ORDERS.keySerde(), ORDERS.valueSerde())
                 .aggregate(

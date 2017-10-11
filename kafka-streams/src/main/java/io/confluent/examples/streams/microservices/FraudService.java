@@ -25,7 +25,8 @@ import static io.confluent.examples.streams.microservices.util.MicroserviceUtils
  * <p>
  * It turns out this is surprisingly tricky to do. I tried two different methods.
  * <p>
- * processOrdersV1 -> creates a table of the total value and then refers back to it. This doesn't work for two reason
+ * processOrdersV1 -> creates a windowed table of the total value of orders for each customer and then refers back to it.
+ * This doesn't work for two reason:
  * (a) the table gets updated after the order is processed so you get an incorrect result.
  * (b) The change of key to customer id creates duplicates if there are multiple orders per customer.
  * <p>

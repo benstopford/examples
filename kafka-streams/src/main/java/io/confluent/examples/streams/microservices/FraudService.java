@@ -112,7 +112,6 @@ public class FraudService implements Service {
      * (i.e. orders with the same customer id) get removed from the output stream by the aggregate. I can't find any
      * way to preserve them.
      */
-
     private KafkaStreams processOrdersV2(final String bootstrapServers,
                                          final String stateDir) {
 
@@ -135,7 +134,6 @@ public class FraudService implements Service {
         //Ditch the windowing
         KStream<Long, OrderValue> ordersWithTotals = aggregate
                 .toStream((windowedKey, orderValue) -> windowedKey.key());
-
 
         ordersWithTotals.print("ordersWithTotals");
 

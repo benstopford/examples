@@ -2,6 +2,7 @@ package io.confluent.examples.streams.microservices;
 
 import io.confluent.examples.streams.avro.microservices.Order;
 import io.confluent.examples.streams.avro.microservices.OrderValidation;
+import io.confluent.examples.streams.avro.microservices.OrderValue;
 import io.confluent.examples.streams.avro.microservices.ProductType;
 import io.confluent.kafka.streams.serdes.avro.SpecificAvroSerde;
 import org.apache.kafka.common.serialization.Serde;
@@ -15,6 +16,7 @@ import static io.confluent.examples.streams.microservices.util.MicroserviceUtils
 import static io.confluent.kafka.serializers.AbstractKafkaAvroSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG;
 
 public class Schemas {
+    public static final SpecificAvroSerde ORDER_VALUE_SERDE = new SpecificAvroSerde<OrderValue>();
 
     public static class Topic<K, V> {
         private String name;
@@ -67,6 +69,7 @@ public class Schemas {
             configure(topic.keySerde(), url);
             configure(topic.valueSerde(), url);
         }
+        configure(ORDER_VALUE_SERDE, url);
     }
 
     private static void configure(Serde serde, String url) {

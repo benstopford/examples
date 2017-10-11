@@ -12,8 +12,7 @@ import org.junit.Test;
 
 import java.util.List;
 
-import static io.confluent.examples.streams.avro.microservices.OrderType.CREATED;
-import static io.confluent.examples.streams.avro.microservices.OrderType.FAILED;
+import static io.confluent.examples.streams.avro.microservices.OrderType.*;
 import static io.confluent.examples.streams.avro.microservices.ProductType.JUMPERS;
 import static io.confluent.examples.streams.avro.microservices.ProductType.UNDERPANTS;
 import static java.util.Arrays.asList;
@@ -34,6 +33,8 @@ public class OrdersServiceTest extends TestUtils {
 
     @Test
     public void shouldAggregateRuleSuccesses() throws Exception {
+        TestUtils.tailTopicToConsole(Topics.ORDER_VALIDATIONS, CLUSTER.bootstrapServers());
+        TestUtils.tailTopicToConsole(Topics.ORDERS, CLUSTER.bootstrapServers());
 
         //Given
         ordersService = new OrdersService();
@@ -63,7 +64,7 @@ public class OrdersServiceTest extends TestUtils {
 
         //And the first order should have been validated but the second should have failed
         assertThat(finalOrders).contains(
-                new Order(0L, 0L, CREATED, UNDERPANTS, 3, 5.00d),
+                new Order(0L, 0L, VALIDATED, UNDERPANTS, 3, 5.00d),
                 new Order(1L, 0L, FAILED, JUMPERS, 1, 75.00d)
         );
     }

@@ -41,15 +41,19 @@ public class OrdersService implements Service {
                 .filter((id, order) -> OrderType.CREATED.equals(order.getState()));
 
         //If all rules pass then validate the order
-        rules.groupByKey(ORDER_VALIDATIONS.keySerde(), ORDER_VALIDATIONS.valueSerde())
+        KStream<Long, Long> passCounts = rules.groupByKey(ORDER_VALIDATIONS.keySerde(), ORDER_VALIDATIONS.valueSerde())
                 .aggregate(
                         () -> 0L,
                         (id, result, total) -> PASS.equals(result.getPassed()) ? total + 1 : total,
-                        TimeWindows.of(60 * 1000L),
+                        TimeWindows.of(30 * 60 * 1000L), //TODO if the window is on the epoch then this is giong to fail periodically unless it is sliding. is it sliding?
                         Serdes.Long()
                 )
-                .toStream((windowedKey, total) -> windowedKey.key()) //get rid of window
-                .filter((k, total) -> total >= numberOfRules)
+                .toStream((windowedKey, total) -> windowedKey.key()); //get rid of window
+
+        passCounts.print("OrderId->PassCount");
+        KStream<Long, Long> filteredCounts = passCounts.filter((k, total) -> total >= numberOfRules);
+
+        filteredCounts
                 .join(orders, (id, order) -> newBuilder(order).setState(VALIDATED).build(), JoinWindows.of(3000 * 1000L), ORDERS.keySerde(), Serdes.Long(), ORDERS.valueSerde())
                 .to(ORDERS.keySerde(), ORDERS.valueSerde(), ORDERS.name());
 

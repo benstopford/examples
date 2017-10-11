@@ -21,6 +21,7 @@ import org.junit.ClassRule;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Properties;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executors;
 import java.util.stream.Collectors;
 
@@ -67,7 +68,7 @@ public class TestUtils {
     public static <K, V> List<KeyValue<K, V>> readKeyValues(Schemas.Topic<K, V> topic, int numberToRead, String bootstrapServers) throws InterruptedException {
         Properties consumerConfig = new Properties();
         consumerConfig.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
-        consumerConfig.put(ConsumerConfig.GROUP_ID_CONFIG, "Test-Reader-" + String.valueOf(System.currentTimeMillis()));
+        consumerConfig.put(ConsumerConfig.GROUP_ID_CONFIG, "Test-Reader-" + consumerCounter++);
         consumerConfig.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
 
         KafkaConsumer<K, V> consumer = new KafkaConsumer(consumerConfig, topic.keySerde().deserializer(), topic.valueSerde().deserializer());
@@ -94,14 +95,15 @@ public class TestUtils {
                 actualValues.add(KeyValue.pair(record.key(), record.value()));
             }
             return actualValues.size() == numberToRead;
-        }, 20000, "Timed out reading orders.");
+        }, 30000, "Timed out reading orders.");
         return actualValues;
     }
 
+    private static int consumerCounter = 0;
     public static <K, V> KafkaConsumer<K, V> createConsumer(Schemas.Topic<K, V> topic, String bootstrapServers) {
         Properties consumerConfig = new Properties();
         consumerConfig.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
-        consumerConfig.put(ConsumerConfig.GROUP_ID_CONFIG, "Test-Reader-" + String.valueOf(System.currentTimeMillis()));
+        consumerConfig.put(ConsumerConfig.GROUP_ID_CONFIG, "Test-Reader-" + consumerCounter++);
         consumerConfig.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
 
         KafkaConsumer<K, V> consumer = new KafkaConsumer(consumerConfig, topic.keySerde().deserializer(), topic.valueSerde().deserializer());
@@ -109,7 +111,7 @@ public class TestUtils {
         return consumer;
     }
 
-    static List<TopicTailer> tailers = new ArrayList();
+    private static List<TopicTailer> tailers = new ArrayList();
 
     public static <K, V> void tailTopicToConsole(Schemas.Topic<K, V> topic, String bootstrapServers) {
         TopicTailer task = new TopicTailer(topic, bootstrapServers);
@@ -136,7 +138,7 @@ public class TestUtils {
         public void run() {
             Properties consumerConfig = new Properties();
             consumerConfig.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
-            consumerConfig.put(ConsumerConfig.GROUP_ID_CONFIG, "Test-Reader-" + String.valueOf(System.currentTimeMillis()));
+            consumerConfig.put(ConsumerConfig.GROUP_ID_CONFIG, "Test-Reader-" + consumerCounter++);
             consumerConfig.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
 
             KafkaConsumer<K, V> consumer = new KafkaConsumer(consumerConfig, topic.keySerde().deserializer(), topic.valueSerde().deserializer());
@@ -145,7 +147,7 @@ public class TestUtils {
             while (running) {
                 ConsumerRecords<K, V> records = consumer.poll(100);
                 for (ConsumerRecord<K, V> record : records) {
-                    System.out.println(topic.name() + "->" + record.value());
+                    System.out.println(record.offset() + ": " + topic.name() + "->" + record.value());
                 }
             }
             consumer.close();
@@ -174,21 +176,39 @@ public class TestUtils {
     public void sendOrders(List<Order> orders) {
         KafkaProducer<Long, Order> ordersProducer = new KafkaProducer(producerConfig(CLUSTER), Schemas.Topics.ORDERS.keySerde().serializer(), Schemas.Topics.ORDERS.valueSerde().serializer());
         for (Order order : orders)
-            ordersProducer.send(new ProducerRecord(Schemas.Topics.ORDERS.name(), order.getId(), order));
+            try {
+                ordersProducer.send(new ProducerRecord(Schemas.Topics.ORDERS.name(), order.getId(), order)).get();
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            } catch (ExecutionException e) {
+                e.printStackTrace();
+            }
         ordersProducer.close();
     }
 
     public void sendOrderValuations(List<OrderValidation> orderValidations) {
         KafkaProducer<Long, Order> ordersProducer = new KafkaProducer(producerConfig(CLUSTER), Schemas.Topics.ORDER_VALIDATIONS.keySerde().serializer(), Schemas.Topics.ORDER_VALIDATIONS.valueSerde().serializer());
         for (OrderValidation ov : orderValidations)
-            ordersProducer.send(new ProducerRecord(Schemas.Topics.ORDER_VALIDATIONS.name(), ov.getOrderId(), ov));
+            try {
+                ordersProducer.send(new ProducerRecord(Schemas.Topics.ORDER_VALIDATIONS.name(), ov.getOrderId(), ov)).get();
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            } catch (ExecutionException e) {
+                e.printStackTrace();
+            }
         ordersProducer.close();
     }
 
     public void sendInventory(List<KeyValue<ProductType, Integer>> inventory, Schemas.Topic<ProductType, Integer> topic) {
         KafkaProducer<ProductType, Integer> stockProducer = new KafkaProducer<>(producerConfig(CLUSTER), topic.keySerde().serializer(), Schemas.Topics.WAREHOUSE_INVENTORY.valueSerde().serializer());
         for (KeyValue kv : inventory)
-            stockProducer.send(new ProducerRecord(Schemas.Topics.WAREHOUSE_INVENTORY.name(), kv.key, kv.value));
+            try {
+                stockProducer.send(new ProducerRecord(Schemas.Topics.WAREHOUSE_INVENTORY.name(), kv.key, kv.value)).get();
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            } catch (ExecutionException e) {
+                e.printStackTrace();
+            }
         stockProducer.close();
     }
 

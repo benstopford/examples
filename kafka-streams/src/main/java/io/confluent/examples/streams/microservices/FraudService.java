@@ -29,6 +29,25 @@ public class FraudService implements Service {
         System.out.println("Started Service " + getClass().getSimpleName());
     }
 
+
+    /**
+     * This test fails because the code creates duplicates. The problem is we're torn between two non-ideal situations.
+     * Either (a) we make the up table custId->total a KTable. In this case there is a race between creating this table
+     * and joining the table back to orders. As the table doesn't trigger we typically don't get any results at all with
+     * this method.
+     * <p>
+     * Alternatively we convert it to a stream. In this case the problem is more subtle. When a customer value is updated
+     * it updates the custId->total stream, but if we have multiple orders for the same customer all those orders orders
+     * will be triggered, not just the order that created it. So you get duplicate outputs. Since you've lost the context
+     * of which order triggered on that side, you can't do anything about it.
+     * <p>
+     * Probably the best solution is to use the processor API, although this is likely to have similar ordering issues.
+     * <p>
+     * Ahh. the answer is to compute the aggregate but keep the whole order inside the result. then you have a stream with
+     * both the current aggregated count and the value. then you never need to join back to the orders stream!! ha ha.
+     */
+
+
     private KafkaStreams processOrders(final String bootstrapServers,
                                        final String stateDir) {
 
@@ -44,7 +63,7 @@ public class FraudService implements Service {
                 .groupBy((id, order) -> order.getCustomerId(), ORDERS.keySerde(), ORDERS.valueSerde())
                 .aggregate(
                         () -> 0D,
-                        (custId, order, total) -> total + order.getQuantity() * order.getPrice(),
+                        (custId, order, total) -> total + order.getQuantity() * order.getPrice(), //TODO tomorrow: add the order id in here as a tuple including the order Id as a double,long tuple
                         TimeWindows.of(60 * 1000L), //TODO - why doesn't it work if we make this big?
                         Serdes.Double());
 
@@ -55,10 +74,15 @@ public class FraudService implements Service {
         //Rekey orders to be by customer id so we can join them to the total-value table
         KStream<Long, Order> ordersByCustId = orders.selectKey((id, order) -> order.getCustomerId());
 
+        ordersByCustId.print("ordersByCustId");
+        totalsByCustomer.print("totalsByCustomer");
+
         //Join the orders to the table to include the total-value
         KStream<Long, OrderValue> orderAndAmount = ordersByCustId  //TODO why does this create duplicates?
                 .join(totalsByCustomer, OrderValue::new
-                        , JoinWindows.of(3000 * 1000L), ORDERS.keySerde(), ORDERS.valueSerde(), Serdes.Double());
+                        , JoinWindows.of(3000 * 1000L), Serdes.Long(), Schemas.ORDER_VALUE_SERDE, Serdes.Double()); //todo tomorrow add a filter here that filters out any record that wasn't triggered by the appropriate order id
+
+        orderAndAmount.print("orderAndAmount");
 
         //Now branch the stream into two, for pass and fail, based on whether the windowed total is over $2000
         orderAndAmount.branch((id, orderValue) -> orderValue.getValue() >= FRAUD_LIMIT)[0]

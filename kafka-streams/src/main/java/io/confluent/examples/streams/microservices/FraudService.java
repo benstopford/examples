@@ -86,7 +86,7 @@ public class FraudService implements Service {
         ordersByCustId.print("ordersByCustId");
         totalsByCustomer.print("totalsByCustomer");
 
-        //Join the orders to the table to include the total-value
+        //Join the orders back to the table of totals
         KStream<Long, OrderValue> orderAndAmount = ordersByCustId  //TODO why does this create duplicates?
                 .join(totalsByCustomer, OrderValue::new
                         , JoinWindows.of(3000 * 1000L), Serdes.Long(), Schemas.ORDER_VALUE_SERDE, Serdes.Double()); //todo tomorrow add a filter here that filters out any record that wasn't triggered by the appropriate order id

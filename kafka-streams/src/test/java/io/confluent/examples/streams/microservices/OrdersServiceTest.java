@@ -33,8 +33,6 @@ public class OrdersServiceTest extends TestUtils {
 
     @Test
     public void shouldAggregateRuleSuccesses() throws Exception {
-        TestUtils.tailTopicToConsole(Topics.ORDER_VALIDATIONS, CLUSTER.bootstrapServers());
-        TestUtils.tailTopicToConsole(Topics.ORDERS, CLUSTER.bootstrapServers());
 
         //Given
         ordersService = new OrdersService();

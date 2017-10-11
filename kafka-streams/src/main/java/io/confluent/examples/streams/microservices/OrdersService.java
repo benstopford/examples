@@ -39,6 +39,7 @@ public class OrdersService implements Service {
         KStream<Long, OrderValidation> rules = builder.stream(ORDER_VALIDATIONS.keySerde(), ORDER_VALIDATIONS.valueSerde(), ORDER_VALIDATIONS.name());
         KStream<Long, Order> orders = builder.stream(ORDERS.keySerde(), ORDERS.valueSerde(), ORDERS.name())
                 .filter((id, order) -> OrderType.CREATED.equals(order.getState()));
+        rules.print("rule validations inbound");
 
         //If all rules pass then validate the order
         KStream<Long, Long> passCounts = rules.groupByKey(ORDER_VALIDATIONS.keySerde(), ORDER_VALIDATIONS.valueSerde())

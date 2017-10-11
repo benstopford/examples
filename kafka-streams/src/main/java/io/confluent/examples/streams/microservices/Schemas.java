@@ -16,7 +16,8 @@ import static io.confluent.examples.streams.microservices.util.MicroserviceUtils
 import static io.confluent.kafka.serializers.AbstractKafkaAvroSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG;
 
 public class Schemas {
-    public static final SpecificAvroSerde ORDER_VALUE_SERDE = new SpecificAvroSerde<OrderValue>();
+    public static String schemaRegistryUrl = "";
+    public static SpecificAvroSerde ORDER_VALUE_SERDE = new SpecificAvroSerde<OrderValue>();
 
     public static class Topic<K, V> {
         private String name;
@@ -60,6 +61,7 @@ public class Schemas {
             ORDERS = new Topic("orders", Serdes.Long(), new SpecificAvroSerde<Order>());
             ORDER_VALIDATIONS = new Topic("order-validations", Serdes.Long(), new SpecificAvroSerde<OrderValidation>());
             WAREHOUSE_INVENTORY = new Topic("warehouse-inventory", new ProductTypeSerde(), Serdes.Integer());
+            ORDER_VALUE_SERDE = new SpecificAvroSerde<OrderValue>();
         }
     }
 
@@ -70,6 +72,7 @@ public class Schemas {
             configure(topic.valueSerde(), url);
         }
         configure(ORDER_VALUE_SERDE, url);
+        schemaRegistryUrl = url;
     }
 
     private static void configure(Serde serde, String url) {

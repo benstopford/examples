@@ -56,7 +56,6 @@ public class TestUtils {
         return consumerConfig;
     }
 
-
     public static <K, V> List<V> read(Schemas.Topic<K, V> topic, int numberToRead, String bootstrapServers) throws InterruptedException {
         return readKeyValues(topic, numberToRead, bootstrapServers).stream().map(kv -> kv.value).collect(Collectors.toList());
     }
@@ -100,6 +99,7 @@ public class TestUtils {
     }
 
     private static int consumerCounter = 0;
+
     public static <K, V> KafkaConsumer<K, V> createConsumer(Schemas.Topic<K, V> topic, String bootstrapServers) {
         Properties consumerConfig = new Properties();
         consumerConfig.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
@@ -136,28 +136,32 @@ public class TestUtils {
 
         @Override
         public void run() {
-            Properties consumerConfig = new Properties();
-            consumerConfig.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
-            consumerConfig.put(ConsumerConfig.GROUP_ID_CONFIG, "Test-Reader-" + consumerCounter++);
-            consumerConfig.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
+            try {
+                Properties consumerConfig = new Properties();
+                consumerConfig.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
+                consumerConfig.put(ConsumerConfig.GROUP_ID_CONFIG, "Test-Reader-" + consumerCounter++);
+                consumerConfig.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
 
-            KafkaConsumer<K, V> consumer = new KafkaConsumer(consumerConfig, topic.keySerde().deserializer(), topic.valueSerde().deserializer());
-            consumer.subscribe(singletonList(topic.name()));
+                KafkaConsumer<K, V> consumer = new KafkaConsumer(consumerConfig, topic.keySerde().deserializer(), topic.valueSerde().deserializer());
+                consumer.subscribe(singletonList(topic.name()));
 
-            while (running) {
-                ConsumerRecords<K, V> records = consumer.poll(100);
-                for (ConsumerRecord<K, V> record : records) {
-                    System.out.println(record.offset() + ": " + topic.name() + "->" + record.value());
+                while (running) {
+                    ConsumerRecords<K, V> records = consumer.poll(100);
+                    for (ConsumerRecord<K, V> record : records) {
+                        System.out.println(record.offset() + ": " + topic.name() + "->" + record.value());
+                    }
                 }
+                consumer.close();
+            } finally {
+                closed = true;
             }
-            consumer.close();
-            closed = true;
         }
 
         void stop() {
             running = false;
             while (!closed) try {
-                Thread.sleep(1);
+                Thread.sleep(50);
+                System.out.println("Closing tailer...");
             } catch (InterruptedException e) {
             }
         }
@@ -173,7 +177,7 @@ public class TestUtils {
     }
 
     //TODO refactor these send messages into one
-    public void sendOrders(List<Order> orders) {
+    public static void sendOrders(List<Order> orders) {
         KafkaProducer<Long, Order> ordersProducer = new KafkaProducer(producerConfig(CLUSTER), Schemas.Topics.ORDERS.keySerde().serializer(), Schemas.Topics.ORDERS.valueSerde().serializer());
         for (Order order : orders)
             try {
@@ -186,7 +190,7 @@ public class TestUtils {
         ordersProducer.close();
     }
 
-    public void sendOrderValuations(List<OrderValidation> orderValidations) {
+    public static void sendOrderValuations(List<OrderValidation> orderValidations) {
         KafkaProducer<Long, Order> ordersProducer = new KafkaProducer(producerConfig(CLUSTER), Schemas.Topics.ORDER_VALIDATIONS.keySerde().serializer(), Schemas.Topics.ORDER_VALIDATIONS.valueSerde().serializer());
         for (OrderValidation ov : orderValidations)
             try {
@@ -199,7 +203,7 @@ public class TestUtils {
         ordersProducer.close();
     }
 
-    public void sendInventory(List<KeyValue<ProductType, Integer>> inventory, Schemas.Topic<ProductType, Integer> topic) {
+    public static void sendInventory(List<KeyValue<ProductType, Integer>> inventory, Schemas.Topic<ProductType, Integer> topic) {
         KafkaProducer<ProductType, Integer> stockProducer = new KafkaProducer<>(producerConfig(CLUSTER), topic.keySerde().serializer(), Schemas.Topics.WAREHOUSE_INVENTORY.valueSerde().serializer());
         for (KeyValue kv : inventory)
             try {

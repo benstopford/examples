@@ -73,7 +73,7 @@ public class FraudService implements Service {
                 .groupBy((id, order) -> order.getCustomerId(), ORDERS.keySerde(), ORDERS.valueSerde())
                 .aggregate(
                         () -> 0D,
-                        (custId, order, total) -> total + order.getQuantity() * order.getPrice(), //TODO tomorrow: add the order id in here as a tuple including the order Id as a double,long tuple
+                        (custId, order, total) -> total + order.getQuantity() * order.getPrice(),
                         TimeWindows.of(60 * 1000L), //TODO - why doesn't it work if we make this big?
                         Serdes.Double());
 
@@ -90,7 +90,7 @@ public class FraudService implements Service {
         //Join the orders back to the table of totals
         KStream<Long, OrderValue> orderAndAmount = ordersByCustId  //TODO why does this create duplicates?
                 .join(totalsByCustomer, OrderValue::new
-                        , JoinWindows.of(3000 * 1000L), Serdes.Long(), Schemas.ORDER_VALUE_SERDE, Serdes.Double()); //todo tomorrow add a filter here that filters out any record that wasn't triggered by the appropriate order id
+                        , JoinWindows.of(3000 * 1000L), Serdes.Long(), Schemas.ORDER_VALUE_SERDE, Serdes.Double());
 
         orderAndAmount.print("orderAndAmount");
 

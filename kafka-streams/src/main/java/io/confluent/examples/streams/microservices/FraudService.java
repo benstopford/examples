@@ -21,7 +21,7 @@ import static io.confluent.examples.streams.microservices.util.MicroserviceUtils
  * This service searches for potentially fraudulent transactions by calculating the total value of orders for a
  * customer within a time period, then checks to see if this is over a configured limit.
  * <p>
- * i.e. if(SUM(order.value, 5Mins, GroupBy customer) > $5000) -> Fail(orderId) else Pass(orderId)
+ * i.e. if(SUM(order.value, 5Mins) > $5000) GroupBy customer -> Fail(orderId) else Pass(orderId)
  * <p>
  * It turns out this is surprisingly tricky to do. I tried two different methods.
  * <p>

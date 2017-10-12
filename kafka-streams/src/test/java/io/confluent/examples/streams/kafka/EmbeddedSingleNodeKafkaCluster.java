@@ -98,6 +98,7 @@ public class EmbeddedSingleNodeKafkaCluster extends ExternalResource {
      * Stops the cluster.
      */
     public void stop() {
+        System.out.println("Stopping Confluent");
         try {
             try {
                 if (schemaRegistry != null) {
@@ -119,6 +120,7 @@ public class EmbeddedSingleNodeKafkaCluster extends ExternalResource {
         } finally {
             running = false;
         }
+        System.out.println("Confluent Stopped");
     }
 
     /**

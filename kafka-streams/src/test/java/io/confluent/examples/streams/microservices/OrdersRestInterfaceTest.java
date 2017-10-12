@@ -30,7 +30,6 @@ public class OrdersRestInterfaceTest {
     @Before
     public void start() throws Exception {
         port = randomFreeLocalPort();
-
     }
 
     @After
@@ -44,14 +43,15 @@ public class OrdersRestInterfaceTest {
         final String baseUrl = "http://localhost:" + port + "/orders";
 
         //Stub the underlying orders service
-        OrdersRequestResponse service = mock(OrdersRequestResponse.class);
-        when(service.getOrder(1L)).thenReturn(new Order(1L, 2L, OrderType.VALIDATED, ProductType.JUMPERS, 10, 100d));
-        when(service.putOrderAndWait(any(Order.class))).thenReturn(true);
+        OrderCommand command = mock(OrderCommand.class);
+        when(command.putOrderAndWait(any(Order.class))).thenReturn(true);
+        OrderQuery query = mock(OrderQuery.class);
+        when(query.getOrder(1L)).thenReturn(new Order(1L, 2L, OrderType.VALIDATED, ProductType.JUMPERS, 10, 100d));
 
         //Start the rest interface
         rest = new OrdersRestInterface(
                 new HostInfo("localhost", port),
-                service
+                command, query
         );
         rest.start();
 

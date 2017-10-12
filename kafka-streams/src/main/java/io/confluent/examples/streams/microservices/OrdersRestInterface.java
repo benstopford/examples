@@ -20,18 +20,20 @@ import java.net.HttpURLConnection;
 public class OrdersRestInterface {
     private Server jettyServer;
     private HostInfo hostInfo;
-    private OrdersRequestResponse service;
+    private OrderCommand command;
+    private OrderQuery query;
 
-    public OrdersRestInterface(HostInfo hostInfo, OrdersRequestResponse ordersRequestResponse) {
+    public OrdersRestInterface(HostInfo hostInfo, OrderCommand orderCommand, OrderQuery query) {
         this.hostInfo = hostInfo;
-        this.service = ordersRequestResponse;
+        this.command = orderCommand;
+        this.query = query;
     }
 
     @GET()
     @Path("order/{id}")
     @Produces(MediaType.APPLICATION_JSON)
     public OrderBean song(@PathParam("id") final Long id) {
-        Order order = service.getOrder(id);
+        Order order = query.getOrder(id);
         System.out.println("/order/id --> " + order);
         return OrderBean.toBean(order);
     }
@@ -42,7 +44,7 @@ public class OrdersRestInterface {
     public Response submitOrder(OrderBean order) {
         System.out.println("Running post of " + order);
 
-        boolean success = service.putOrderAndWait(OrderBean.fromBean(order));
+        boolean success = command.putOrderAndWait(OrderBean.fromBean(order));
         if (success)
             return Response.status(HttpURLConnection.HTTP_CREATED).build();
         else

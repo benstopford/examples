@@ -40,6 +40,8 @@ public class TheTest extends TestUtils {
         services.add(new InventoryService());
         services.add(new OrderDetailsValidationService());
         services.add(new OrdersService());
+
+        TestUtils.tailAllTopicsToConsole(CLUSTER.bootstrapServers());
     }
 
     @After
@@ -49,6 +51,7 @@ public class TheTest extends TestUtils {
         CLUSTER.stop();
     }
 
+    //TODO test latency of processing for records when in a bactch of say 200 and end to end latency may stretch.
 
     @Test
     public void shouldProcessManyOrdersAcrossAllServices() throws InterruptedException {
@@ -64,8 +67,6 @@ public class TheTest extends TestUtils {
 
         //Set up consumers
         KafkaConsumer<Long, Order> consumer = TestUtils.createConsumer(Topics.ORDERS, CLUSTER.bootstrapServers());
-        TestUtils.tailTopicToConsole(Topics.ORDERS, CLUSTER.bootstrapServers());
-        TestUtils.tailTopicToConsole(Topics.ORDER_VALIDATIONS, CLUSTER.bootstrapServers());
 
         //First run outside of timing loop.
         Order order = new Order(0L, 0L, CREATED, UNDERPANTS, 3, -5.00d); //should fail details check

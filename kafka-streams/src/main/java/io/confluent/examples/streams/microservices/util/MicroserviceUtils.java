@@ -40,7 +40,8 @@ public class MicroserviceUtils {
         config.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
         config.put(StreamsConfig.STATE_DIR_CONFIG, stateDir);
         config.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
-        config.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 500);
+        config.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, "exactly_once");
+        config.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 1); //commit as fast as possible
         return config;
     }
 

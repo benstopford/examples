@@ -3,7 +3,6 @@ package io.confluent.examples.streams.microservices;
 import io.confluent.examples.streams.avro.microservices.Order;
 import io.confluent.examples.streams.avro.microservices.OrderType;
 import io.confluent.examples.streams.avro.microservices.OrderValidation;
-import io.confluent.examples.streams.microservices.util.MicroserviceUtils;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.kstream.JoinWindows;
@@ -17,6 +16,7 @@ import static io.confluent.examples.streams.avro.microservices.OrderValidationRe
 import static io.confluent.examples.streams.avro.microservices.OrderValidationResult.PASS;
 import static io.confluent.examples.streams.microservices.Schemas.Topics.ORDERS;
 import static io.confluent.examples.streams.microservices.Schemas.Topics.ORDER_VALIDATIONS;
+import static io.confluent.examples.streams.microservices.util.MicroserviceUtils.streamsConfig;
 
 public class OrdersService implements Service {
     public static final String ORDERS_SERVICE_APP_ID = "orders-service";
@@ -24,7 +24,7 @@ public class OrdersService implements Service {
 
     @Override
     public void start(String bootstrapServers) {
-        streams = processOrders(bootstrapServers, "/tmp/kafka-streams");
+        streams = aggregateOrderValidations(bootstrapServers, "/tmp/kafka-streams");
         streams.cleanUp(); //don't do this in prod as it clears your state stores
         streams.start();
         System.out.println("Started Service " + getClass().getSimpleName());
@@ -32,7 +32,7 @@ public class OrdersService implements Service {
 
     //TODO change validationresult.getpassed to something more explicit like validationresult
 
-    private KafkaStreams processOrders(String bootstrapServers, String stateDir) {
+    private KafkaStreams aggregateOrderValidations(String bootstrapServers, String stateDir) {
         final int numberOfRules = 3; //TODO put into a ktable
 
         KStreamBuilder builder = new KStreamBuilder();
@@ -42,19 +42,18 @@ public class OrdersService implements Service {
         rules.print("rule validations inbound");
 
         //If all rules pass then validate the order
-        KStream<Long, Long> passCounts = rules.groupByKey(ORDER_VALIDATIONS.keySerde(), ORDER_VALIDATIONS.valueSerde())
+        rules.groupByKey(ORDER_VALIDATIONS.keySerde(), ORDER_VALIDATIONS.valueSerde())
                 .aggregate(
                         () -> 0L,
                         (id, result, total) -> PASS.equals(result.getPassed()) ? total + 1 : total,
                         TimeWindows.of(30 * 60 * 1000L), //TODO if the window is on the epoch then this is giong to fail periodically unless it is sliding. is it sliding?
                         Serdes.Long()
                 )
-                .toStream((windowedKey, total) -> windowedKey.key()); //get rid of window
-
-        passCounts.print("OrderId->PassCount");
-        KStream<Long, Long> filteredCounts = passCounts.filter((k, total) -> total >= numberOfRules);
-
-        filteredCounts
+                //get rid of window
+                .toStream((windowedKey, total) -> windowedKey.key())
+                //filter where all rules passed
+                .filter((k, total) -> total >= numberOfRules)
+                //Join back to orders and output
                 .join(orders, (id, order) -> newBuilder(order).setState(VALIDATED).build(), JoinWindows.of(3000 * 1000L), ORDERS.keySerde(), Serdes.Long(), ORDERS.valueSerde())
                 .to(ORDERS.keySerde(), ORDERS.valueSerde(), ORDERS.name());
 
@@ -65,7 +64,7 @@ public class OrdersService implements Service {
                 .reduce((order, v1) -> order)
                 .to(ORDERS.keySerde(), ORDERS.valueSerde(), ORDERS.name());
 
-        return new KafkaStreams(builder, MicroserviceUtils.streamsConfig(bootstrapServers, stateDir, ORDERS_SERVICE_APP_ID));
+        return new KafkaStreams(builder, streamsConfig(bootstrapServers, stateDir, ORDERS_SERVICE_APP_ID));
     }
 
     @Override

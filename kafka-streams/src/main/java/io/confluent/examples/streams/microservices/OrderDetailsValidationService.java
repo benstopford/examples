@@ -29,11 +29,12 @@ public class OrderDetailsValidationService implements Service {
     private KafkaConsumer<Long, Order> consumer;
     private KafkaProducer<Long, OrderValidation> producer;
     private ExecutorService executorService = Executors.newSingleThreadExecutor();
-    private boolean running = true;
+    private boolean running = false;
 
     @Override
     public void start(String bootstrapServers) {
         executorService.execute(() -> startService(bootstrapServers));
+        running = true;
         System.out.println("Started Service " + getClass().getSimpleName());
     }
 

@@ -18,7 +18,9 @@ import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.streams.KeyValue;
 import org.junit.ClassRule;
 
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.List;
 import java.util.Properties;
 import java.util.concurrent.ExecutionException;
@@ -34,7 +36,8 @@ public class TestUtils {
             //Set transactions to work with a single kafka broker.
             new KeyValue(KafkaConfig.TransactionsTopicReplicationFactorProp(), "1"),
             new KeyValue(KafkaConfig.TransactionsTopicMinISRProp(), "1"),
-            new KeyValue(KafkaConfig.TransactionsTopicPartitionsProp(), "1")
+            new KeyValue(KafkaConfig.TransactionsTopicPartitionsProp(), "1"),
+            new KeyValue(KafkaConfig.LogMessageTimestampTypeProp(), "LogAppendTime") //TODO probably shoudln't leave this here
     ));
 
     protected static Properties producerConfig(EmbeddedSingleNodeKafkaCluster cluster) {
@@ -113,7 +116,7 @@ public class TestUtils {
 
     private static List<TopicTailer> tailers = new ArrayList();
 
-    public static <K, V> void tailTopicToConsole(Schemas.Topic<K, V> topic, String bootstrapServers) {
+    public static <K, V> void tailAllTopicsToConsole(Schemas.Topic<K, V> topic, String bootstrapServers) {
         TopicTailer task = new TopicTailer(topic, bootstrapServers);
         tailers.add(task);
         Executors.newSingleThreadExecutor().execute(task);
@@ -123,7 +126,14 @@ public class TestUtils {
         tailers.stream().forEach((t) -> t.stop());
     }
 
+    public static void tailAllTopicsToConsole(String bootstrapServers) {
+        for (Schemas.Topic t : Schemas.Topics.ALL.values()) {
+            tailAllTopicsToConsole(t, bootstrapServers);
+        }
+    }
+
     static class TopicTailer<K, V> implements Runnable {
+        private SimpleDateFormat format = new SimpleDateFormat("HH:mm:ss.SSS");
         private boolean running = true;
         private boolean closed = false;
         private Schemas.Topic<K, V> topic;
@@ -148,7 +158,7 @@ public class TestUtils {
                 while (running) {
                     ConsumerRecords<K, V> records = consumer.poll(100);
                     for (ConsumerRecord<K, V> record : records) {
-                        System.out.println(record.offset() + ": " + topic.name() + "->" + record.value());
+                        System.out.println("[" + format.format(new Date(record.timestamp())) + "]-[" + topic.name() + ":" + record.offset() + "]: " + "->" + record.value());
                     }
                 }
                 consumer.close();

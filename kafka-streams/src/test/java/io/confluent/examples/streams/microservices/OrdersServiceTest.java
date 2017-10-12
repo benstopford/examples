@@ -5,7 +5,7 @@ import io.confluent.examples.streams.avro.microservices.OrderValidation;
 import io.confluent.examples.streams.avro.microservices.OrderValidationResult;
 import io.confluent.examples.streams.avro.microservices.OrderValidationType;
 import io.confluent.examples.streams.microservices.Schemas.Topics;
-import io.confluent.examples.streams.microservices.util.TestUtils;
+import io.confluent.examples.streams.microservices.util.MicroserviceTestUtils;
 import org.junit.After;
 import org.junit.BeforeClass;
 import org.junit.Test;
@@ -18,7 +18,7 @@ import static io.confluent.examples.streams.avro.microservices.ProductType.UNDER
 import static java.util.Arrays.asList;
 import static org.assertj.core.api.Assertions.assertThat;
 
-public class OrdersServiceTest extends TestUtils {
+public class OrdersServiceTest extends MicroserviceTestUtils {
     private List<Order> orders;
     private List<OrderValidation> ruleResults;
     private OrdersService ordersService;
@@ -57,7 +57,7 @@ public class OrdersServiceTest extends TestUtils {
         ordersService.start(CLUSTER.bootstrapServers());
 
 
-        List<Order> finalOrders = TestUtils.read(Topics.ORDERS, 4, CLUSTER.bootstrapServers());
+        List<Order> finalOrders = MicroserviceTestUtils.read(Topics.ORDERS, 4, CLUSTER.bootstrapServers());
         assertThat(finalOrders.size()).isEqualTo(4);
 
         //And the first order should have been validated but the second should have failed

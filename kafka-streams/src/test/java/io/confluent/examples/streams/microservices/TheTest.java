@@ -3,7 +3,7 @@ package io.confluent.examples.streams.microservices;
 import io.confluent.examples.streams.avro.microservices.Order;
 import io.confluent.examples.streams.avro.microservices.ProductType;
 import io.confluent.examples.streams.microservices.Schemas.Topics;
-import io.confluent.examples.streams.microservices.util.TestUtils;
+import io.confluent.examples.streams.microservices.util.MicroserviceTestUtils;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerRecord;
@@ -22,7 +22,7 @@ import static io.confluent.examples.streams.avro.microservices.ProductType.UNDER
 import static java.util.Arrays.asList;
 import static org.assertj.core.api.Assertions.assertThat;
 
-public class TheTest extends TestUtils {
+public class TheTest extends MicroserviceTestUtils {
     private List<Service> services = new ArrayList<>();
 
     //TODO really all our order messages should have a incrementing version id
@@ -41,13 +41,13 @@ public class TheTest extends TestUtils {
         services.add(new OrderDetailsValidationService());
         services.add(new OrdersService());
 
-        TestUtils.tailAllTopicsToConsole(CLUSTER.bootstrapServers());
+        MicroserviceTestUtils.tailAllTopicsToConsole(CLUSTER.bootstrapServers());
     }
 
     @After
     public void tearDown() {
         services.stream().forEach(s -> s.stop());
-        TestUtils.stopTailers();
+        MicroserviceTestUtils.stopTailers();
         CLUSTER.stop();
     }
 
@@ -66,13 +66,13 @@ public class TheTest extends TestUtils {
         sendInventory(inventory, Topics.WAREHOUSE_INVENTORY);
 
         //Set up consumers
-        KafkaConsumer<Long, Order> consumer = TestUtils.createConsumer(Topics.ORDERS, CLUSTER.bootstrapServers());
+        KafkaConsumer<Long, Order> consumer = MicroserviceTestUtils.createConsumer(Topics.ORDERS, CLUSTER.bootstrapServers());
 
         //First run outside of timing loop.
         Order order = new Order(0L, 0L, CREATED, UNDERPANTS, 3, -5.00d); //should fail details check
         ordersProducer.send(new ProducerRecord(Schemas.Topics.ORDERS.name(), order.getId(), order));
 
-        List<KeyValue<Long, Order>> result = TestUtils.readKeyValues2(2, consumer);
+        List<KeyValue<Long, Order>> result = MicroserviceTestUtils.readKeyValues2(2, consumer);
         assertThat(result.stream().map(kv -> kv.value)).isEqualTo(asList(
                 new Order(0L, 0L, CREATED, UNDERPANTS, 3, -5.00d),
                 new Order(0L, 0L, FAILED, UNDERPANTS, 3, -5.00d)
@@ -86,7 +86,7 @@ public class TheTest extends TestUtils {
 
             order = new Order(1L * i, 0L, CREATED, UNDERPANTS, 4, -5.00d);
             ordersProducer.send(new ProducerRecord(Schemas.Topics.ORDERS.name(), order.getId(), order));
-            result = TestUtils.readKeyValues2(2, consumer);
+            result = MicroserviceTestUtils.readKeyValues2(2, consumer);
 
             System.out.println("Iter " + i + " Took " + (System.currentTimeMillis() - start));
             assertThat(result.stream().map(kv -> kv.value)).isEqualTo(asList(

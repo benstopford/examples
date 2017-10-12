@@ -4,7 +4,7 @@ import io.confluent.examples.streams.avro.microservices.Order;
 import io.confluent.examples.streams.avro.microservices.OrderValidation;
 import io.confluent.examples.streams.avro.microservices.OrderValidationResult;
 import io.confluent.examples.streams.avro.microservices.OrderValidationType;
-import io.confluent.examples.streams.microservices.util.TestUtils;
+import io.confluent.examples.streams.microservices.util.MicroserviceTestUtils;
 import org.junit.After;
 import org.junit.BeforeClass;
 import org.junit.Test;
@@ -18,7 +18,7 @@ import static io.confluent.examples.streams.microservices.Schemas.Topics;
 import static java.util.Arrays.asList;
 import static org.assertj.core.api.Assertions.assertThat;
 
-public class OrderDetailsValidationServiceTest extends TestUtils {
+public class OrderDetailsValidationServiceTest extends MicroserviceTestUtils {
 
     private List<Order> orders;
     private List<OrderValidation> expected;
@@ -53,7 +53,7 @@ public class OrderDetailsValidationServiceTest extends TestUtils {
                 new OrderValidation(0L, OrderValidationType.ORDER_DETAILS_CHECK, OrderValidationResult.PASS),
                 new OrderValidation(1L, OrderValidationType.ORDER_DETAILS_CHECK, OrderValidationResult.FAIL)
         );
-        assertThat(TestUtils.read(Topics.ORDER_VALIDATIONS, 2, CLUSTER.bootstrapServers())).isEqualTo(expected);
+        assertThat(MicroserviceTestUtils.read(Topics.ORDER_VALIDATIONS, 2, CLUSTER.bootstrapServers())).isEqualTo(expected);
     }
 
     @After

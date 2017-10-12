@@ -1,6 +1,7 @@
 package io.confluent.examples.streams.microservices;
 
 import io.confluent.examples.streams.avro.microservices.Order;
+import io.confluent.examples.streams.interactivequeries.HostStoreInfo;
 import io.confluent.examples.streams.microservices.rest.OrderBean;
 import org.apache.kafka.streams.state.HostInfo;
 import org.eclipse.jetty.server.Server;
@@ -11,6 +12,9 @@ import org.glassfish.jersey.server.ResourceConfig;
 import org.glassfish.jersey.servlet.ServletContainer;
 
 import javax.ws.rs.*;
+import javax.ws.rs.client.Client;
+import javax.ws.rs.client.ClientBuilder;
+import javax.ws.rs.core.GenericType;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
 import java.net.HttpURLConnection;
@@ -22,6 +26,7 @@ public class OrdersRestInterface {
     private HostInfo hostInfo;
     private OrderCommand command;
     private OrderQuery query;
+    private final Client client = ClientBuilder.newBuilder().register(JacksonFeature.class).build();
 
     public OrdersRestInterface(HostInfo hostInfo, OrderCommand orderCommand, OrderQuery query) {
         this.hostInfo = hostInfo;
@@ -33,9 +38,27 @@ public class OrdersRestInterface {
     @Path("order/{id}")
     @Produces(MediaType.APPLICATION_JSON)
     public OrderBean song(@PathParam("id") final Long id) {
-        Order order = query.getOrder(id);
+        HostStoreInfo host = query.getHostForOrderId(id);
+
+        Order order = thisHost(host) ?
+                query.getOrder(id)
+                : fetchFromOtherHost(host, "orders/order/" + id);
+
         System.out.println("/order/id --> " + order);
         return OrderBean.toBean(order);
+    }
+
+    private boolean thisHost(final HostStoreInfo host) {
+        System.out.println("is that host " + host + " == " + hostInfo);
+        return host.getHost().equals(hostInfo.host()) &&
+                host.getPort() == hostInfo.port();
+    }
+
+    private Order fetchFromOtherHost(final HostStoreInfo host, final String path) {
+        return client.target(String.format("http://%s:%d/%s", host.getHost(), host.getPort(), path))
+                .request(MediaType.APPLICATION_JSON_TYPE)
+                .get(new GenericType<Order>() {
+                });
     }
 
     @POST

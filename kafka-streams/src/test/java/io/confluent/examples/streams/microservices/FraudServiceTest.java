@@ -2,7 +2,7 @@ package io.confluent.examples.streams.microservices;
 
 import io.confluent.examples.streams.avro.microservices.Order;
 import io.confluent.examples.streams.avro.microservices.OrderValidation;
-import io.confluent.examples.streams.microservices.util.TestUtils;
+import io.confluent.examples.streams.microservices.util.MicroserviceTestUtils;
 import org.junit.After;
 import org.junit.BeforeClass;
 import org.junit.Test;
@@ -19,7 +19,7 @@ import static io.confluent.examples.streams.microservices.Schemas.Topics;
 import static java.util.Arrays.asList;
 import static org.assertj.core.api.Assertions.assertThat;
 
-public class FraudServiceTest extends TestUtils {
+public class FraudServiceTest extends MicroserviceTestUtils {
     private List<Order> orders;
     private List<OrderValidation> expected;
     private FraudService fraudService;
@@ -75,6 +75,6 @@ public class FraudServiceTest extends TestUtils {
                 new OrderValidation(6L, FRAUD_CHECK, FAIL),
                 new OrderValidation(7L, FRAUD_CHECK, PASS)
         );
-        assertThat(TestUtils.read(Topics.ORDER_VALIDATIONS, 8, CLUSTER.bootstrapServers())).isEqualTo(expected);
+        assertThat(MicroserviceTestUtils.read(Topics.ORDER_VALIDATIONS, 8, CLUSTER.bootstrapServers())).isEqualTo(expected);
     }
 }

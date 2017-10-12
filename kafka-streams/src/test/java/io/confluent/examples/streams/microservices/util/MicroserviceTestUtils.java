@@ -29,10 +29,10 @@ import java.util.stream.Collectors;
 
 import static java.util.Collections.singletonList;
 
-public class TestUtils {
+public class MicroserviceTestUtils {
 
     @ClassRule
-    public static final EmbeddedSingleNodeKafkaCluster CLUSTER = new EmbeddedSingleNodeKafkaCluster(TestUtils.propsWith(
+    public static final EmbeddedSingleNodeKafkaCluster CLUSTER = new EmbeddedSingleNodeKafkaCluster(MicroserviceTestUtils.propsWith(
             //Set transactions to work with a single kafka broker.
             new KeyValue(KafkaConfig.TransactionsTopicReplicationFactorProp(), "1"),
             new KeyValue(KafkaConfig.TransactionsTopicMinISRProp(), "1"),

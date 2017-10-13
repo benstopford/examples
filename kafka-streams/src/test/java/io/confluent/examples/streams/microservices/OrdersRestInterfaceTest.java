@@ -16,10 +16,9 @@ import javax.ws.rs.client.ClientBuilder;
 import javax.ws.rs.client.Entity;
 import javax.ws.rs.core.GenericType;
 import javax.ws.rs.core.Response;
-import java.io.IOException;
 import java.net.HttpURLConnection;
-import java.net.ServerSocket;
 
+import static io.confluent.examples.streams.microservices.util.MicroserviceTestUtils.randomFreeLocalPort;
 import static javax.ws.rs.core.MediaType.APPLICATION_JSON_TYPE;
 import static org.assertj.core.api.AssertionsForInterfaceTypes.assertThat;
 import static org.mockito.Mockito.*;
@@ -27,7 +26,7 @@ import static org.mockito.Mockito.*;
 public class OrdersRestInterfaceTest {
 
     private int port;
-    private OrdersRestInterface rest;
+    private OrdersRestInterface rest1;
     private OrdersRestInterface rest2;
 
     @Before
@@ -37,8 +36,10 @@ public class OrdersRestInterfaceTest {
 
     @After
     public void shutdown() throws Exception {
-        rest.stop();
-        rest2.stop();
+        if (rest1 != null)
+            rest1.stop();
+        if (rest2 != null)
+            rest2.stop();
     }
 
     @Test
@@ -48,17 +49,17 @@ public class OrdersRestInterfaceTest {
 
         //Stub the underlying orders service
         OrderCommand command = mock(OrderCommand.class);
-        when(command.putOrderAndWait(any(Order.class))).thenReturn(true);
+        when(command.putOrderAndWait(any(Order.class))).thenReturn(OrderCommand.OrderCommandResult.SUCCESS);
         OrderQuery query = mock(OrderQuery.class);
         when(query.getHostForOrderId(anyLong())).thenReturn(new HostStoreInfo("localhost", port, Sets.newHashSet("whatever")));
         when(query.getOrder(1L)).thenReturn(new Order(1L, 2L, OrderType.VALIDATED, ProductType.JUMPERS, 10, 100d));
 
         //Start the rest interface
-        rest = new OrdersRestInterface(
+        rest1 = new OrdersRestInterface(
                 new HostInfo("localhost", port),
                 command, query
         );
-        rest.start();
+        rest1.start();
 
         //When post order
         OrderBean inputOrder = new OrderBean(1L, 2L, OrderType.CREATED, ProductType.JUMPERS, 10, 100d);
@@ -75,6 +76,7 @@ public class OrdersRestInterfaceTest {
                 .get(new GenericType<OrderBean>() {
                 });
 
+        //Then
         assertThat(returnedBean).isEqualTo(new OrderBean(
                 inputOrder.getId(),
                 inputOrder.getCustomerId(),
@@ -98,11 +100,11 @@ public class OrdersRestInterfaceTest {
         when(query1.getHostForOrderId(anyLong())).thenReturn(new HostStoreInfo("localhost", port2, Sets.newHashSet("whatever")));
         when(query1.getOrder(1L)).thenReturn(null);
         //Start the rest interface
-        rest = new OrdersRestInterface(
+        rest1 = new OrdersRestInterface(
                 new HostInfo("localhost", port1),
                 null, query1
         );
-        rest.start();
+        rest1.start();
 
         //2nd rest service correctly returns the order
         OrderQuery query2 = mock(OrderQuery.class);
@@ -131,12 +133,5 @@ public class OrdersRestInterfaceTest {
                 order.getQuantity(),
                 order.getPrice()
         ));
-    }
-
-    public static int randomFreeLocalPort() throws IOException {
-        ServerSocket s = new ServerSocket(0);
-        int port = s.getLocalPort();
-        s.close();
-        return port;
     }
 }

@@ -55,7 +55,7 @@ public class FraudService implements Service {
         KTable<Windowed<Long>, OrderValue> aggregate = orders
                 .groupBy((id, order) -> order.getCustomerId(), ORDERS.keySerde(), ORDERS.valueSerde())
                 .aggregate(
-                        () -> new OrderValue(),
+                        OrderValue::new,
                         (custId, order, orderValue) ->
                                 new OrderValue(order, orderValue.getValue() + order.getQuantity() * order.getPrice()),
                         TimeWindows.of(60 * 1000L),

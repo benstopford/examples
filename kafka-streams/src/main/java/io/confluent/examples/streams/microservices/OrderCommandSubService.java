@@ -1,6 +1,7 @@
 package io.confluent.examples.streams.microservices;
 
 import io.confluent.examples.streams.avro.microservices.Order;
+import io.confluent.examples.streams.avro.microservices.OrderType;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
@@ -14,12 +15,12 @@ import java.util.Properties;
 import java.util.UUID;
 import java.util.concurrent.*;
 
+import static io.confluent.examples.streams.microservices.OrderCommand.OrderCommandResult.*;
 import static java.util.Collections.singletonList;
 
-public class OrderCommandModule implements OrderCommand, Service {
+public class OrderCommandSubService implements OrderCommand, Service {
 
     public final String CONSUMER_GROUP_ID = getClass().getSimpleName() + ":" + UUID.randomUUID();
-    private final String TRANSACTIONAL_ID = getClass().getSimpleName();
     private KafkaConsumer<Long, Order> consumer;
     private KafkaProducer<Long, Order> producer;
     private ExecutorService executorService = Executors.newSingleThreadExecutor();
@@ -27,7 +28,9 @@ public class OrderCommandModule implements OrderCommand, Service {
     private Map<Long, PostCallback> outstandingRequests = new ConcurrentHashMap();
 
     interface PostCallback {
-        void done();
+        void received(boolean succeeded);
+
+        boolean succeeded();
     }
 
     private void startModule(String bootstrapServers) {
@@ -38,29 +41,51 @@ public class OrderCommandModule implements OrderCommand, Service {
     }
 
     @Override
-    public boolean putOrderAndWait(Order order) {
+    public OrderCommandResult putOrderAndWait(Order order) {
+        //todo make this order.requestId()
         try {
+            //Send the order synchronously
             producer.send(new ProducerRecord<>(Schemas.Topics.ORDERS.name(), order.getId(), order)).get();
-            Object monitor = new Object();
-            outstandingRequests.put(order.getId(), () -> monitor.notify());//todo make this order.requestId()
-            synchronized (monitor) {
-                monitor.wait(5000);
-                return true;
-            }
-        } catch (InterruptedException e) {
-            System.out.println("putOrderAndWait timed out for order " + order);
-            e.printStackTrace();
-        } catch (ExecutionException e) {
+
+            //Create a latch and pass it in the callback
+            CountDownLatch latch = new CountDownLatch(1);
+
+            PostCallback callback = callback(latch);
+            outstandingRequests.put(order.getId(), callback);
+
+            //Await the callback (called when the message is consumed)
+            latch.await(10, TimeUnit.SECONDS);
+
+            return latch.getCount() > 0 ? TIMED_OUT :
+                    callback.succeeded() ? SUCCESS : FAILED_VALIDATION;
+
+        } catch (InterruptedException | ExecutionException e) {
             e.printStackTrace();
         }
-        return false;
+        return UNKNOWN_FAILURE;
     }
 
+    private PostCallback callback(final CountDownLatch latch) {
+        return new PostCallback() {
+            boolean succeeded;
+
+            @Override
+            public void received(boolean succeeded) {
+                this.succeeded = succeeded;
+                latch.countDown();
+            }
+
+            @Override
+            public boolean succeeded() {
+                return succeeded;
+            }
+        };
+    }
 
     @Override
     public void start(String bootstrapServers) {
         executorService.execute(() -> startModule(bootstrapServers));
-        while (running == false)
+        while (!running)
             try {
                 Thread.sleep(1);
             } catch (InterruptedException e) {
@@ -73,13 +98,17 @@ public class OrderCommandModule implements OrderCommand, Service {
         try {
             consumer.subscribe(singletonList(Schemas.Topics.ORDERS.name()));
 
+            //Check all incoming orders to see if they were
             while (running) {
                 ConsumerRecords<Long, Order> records = consumer.poll(100);
                 for (ConsumerRecord<Long, Order> record : records) {
                     Order order = record.value();
-                    PostCallback postCallback = outstandingRequests.get(order.getId());
-                    if (postCallback != null)
-                        postCallback.done();
+                    PostCallback callback = outstandingRequests.get(order.getId());
+                    if (callback != null)
+                        if (OrderType.VALIDATED.equals(order.getState()))
+                            callback.received(true);
+                        else if (OrderType.FAILED.equals(order.getState()))
+                            callback.received(false);
                 }
             }
         } finally {
@@ -90,9 +119,7 @@ public class OrderCommandModule implements OrderCommand, Service {
     private void startProducer(String bootstrapServers) {
         Properties producerConfig = new Properties();
         producerConfig.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
-//        producerConfig.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, TRANSACTIONAL_ID);
-        //TODO work out how to enable idempotence without transactions??
-//        producerConfig.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, "true");
+        producerConfig.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, "true");
         producerConfig.put(ProducerConfig.RETRIES_CONFIG, String.valueOf(Integer.MAX_VALUE));
         producerConfig.put(ProducerConfig.ACKS_CONFIG, "all");
 

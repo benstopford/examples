@@ -58,9 +58,9 @@ public class Schemas {
         }
 
         private static void createTopics() {
-            ORDERS = new Topic("orders", Serdes.Long(), new SpecificAvroSerde<Order>());
-            ORDER_VALIDATIONS = new Topic("order-validations", Serdes.Long(), new SpecificAvroSerde<OrderValidation>());
-            WAREHOUSE_INVENTORY = new Topic("warehouse-inventory", new ProductTypeSerde(), Serdes.Integer());
+            ORDERS = new Topic<>("orders", Serdes.Long(), new SpecificAvroSerde<Order>());
+            ORDER_VALIDATIONS = new Topic<>("order-validations", Serdes.Long(), new SpecificAvroSerde<OrderValidation>());
+            WAREHOUSE_INVENTORY = new Topic<>("warehouse-inventory", new ProductTypeSerde(), Serdes.Integer());
             ORDER_VALUE_SERDE = new SpecificAvroSerde<OrderValue>();
         }
     }

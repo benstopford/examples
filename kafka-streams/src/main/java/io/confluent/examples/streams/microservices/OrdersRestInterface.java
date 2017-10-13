@@ -17,7 +17,8 @@ import javax.ws.rs.client.ClientBuilder;
 import javax.ws.rs.core.GenericType;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
-import java.net.HttpURLConnection;
+
+import static java.net.HttpURLConnection.*;
 
 
 @Path("orders")
@@ -40,12 +41,13 @@ public class OrdersRestInterface {
     public OrderBean song(@PathParam("id") final Long id) {
         HostStoreInfo host = query.getHostForOrderId(id);
 
-        Order order = thisHost(host) ?
-                query.getOrder(id)
-                : fetchFromOtherHost(host, "orders/order/" + id);
+        Order order = query.getOrder(id);
+        if (order == null)
+            if (!thisHost(host))
+                order = fetchFromOtherHost(host, "orders/order/" + id);
 
         System.out.println("/order/id --> " + order);
-        return OrderBean.toBean(order);
+        return order == null ? null : OrderBean.toBean(order);
     }
 
     private boolean thisHost(final HostStoreInfo host) {
@@ -55,10 +57,14 @@ public class OrdersRestInterface {
     }
 
     private Order fetchFromOtherHost(final HostStoreInfo host, final String path) {
-        return client.target(String.format("http://%s:%d/%s", host.getHost(), host.getPort(), path))
-                .request(MediaType.APPLICATION_JSON_TYPE)
-                .get(new GenericType<Order>() {
-                });
+        try {
+            return client.target(String.format("http://%s:%d/%s", host.getHost(), host.getPort(), path))
+                    .request(MediaType.APPLICATION_JSON_TYPE)
+                    .get(new GenericType<Order>() {
+                    });
+        } catch (Exception swallowed) {
+            return null;
+        }
     }
 
     @POST
@@ -67,11 +73,19 @@ public class OrdersRestInterface {
     public Response submitOrder(OrderBean order) {
         System.out.println("Running post of " + order);
 
-        boolean success = command.putOrderAndWait(OrderBean.fromBean(order));
-        if (success)
-            return Response.status(HttpURLConnection.HTTP_CREATED).build();
-        else
-            return Response.status(HttpURLConnection.HTTP_GATEWAY_TIMEOUT).build();
+        OrderCommand.OrderCommandResult success = command.putOrderAndWait(OrderBean.fromBean(order));
+        System.out.println("Retuning from post with " + success);
+
+        switch (success) {
+            case SUCCESS:
+                return Response.status(HTTP_CREATED).build();
+            case TIMED_OUT:
+                return Response.status(HTTP_GATEWAY_TIMEOUT).build();
+            case FAILED_VALIDATION:
+                return Response.status(HTTP_BAD_REQUEST).build();
+            default:
+                return Response.status(HTTP_BAD_REQUEST).build();
+        }
     }
 
     public void start() throws Exception {

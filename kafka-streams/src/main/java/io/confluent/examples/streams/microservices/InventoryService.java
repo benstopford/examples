@@ -29,7 +29,7 @@ public class InventoryService implements Service {
 
     //TODO next we need to decrement the reservation and the inventory when the order completes.
     //TODO orders could have multiple products, need order items in model
-    //TODO should probablly have timestamps on all objects, validFrom, validTo (snapshots need clock for this?)
+    //TODO should probably have timestamps on all objects, validFrom, validTo (snapshots need clock for this?)
 
     @Override
     public void start(String bootstrapServers) {
@@ -130,13 +130,9 @@ public class InventoryService implements Service {
 
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
             try {
-                service.close();
+                service.stop();
             } catch (Exception ignored) {
             }
         }));
-    }
-
-    private void close() {
-        streams.close();
     }
 }

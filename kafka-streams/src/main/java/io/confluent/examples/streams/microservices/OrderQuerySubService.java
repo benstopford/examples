@@ -13,7 +13,7 @@ import static io.confluent.examples.streams.microservices.Schemas.Topics.ORDERS;
 import static io.confluent.examples.streams.microservices.util.MicroserviceUtils.streamsConfig;
 
 
-public class OrderQueryModule implements Service, OrderQuery {
+public class OrderQuerySubService implements Service, OrderQuery {
     public static final String ORDERS_STORE_NAME = "orders-store";
     public final String SERVICE_APP_ID = getClass().getSimpleName();
     private KafkaStreams streams;
@@ -27,7 +27,6 @@ public class OrderQueryModule implements Service, OrderQuery {
         streams.start();
         System.out.println("Started Service " + getClass().getSimpleName());
     }
-
 
     private KafkaStreams createOrdersStore(final String bootstrapServers,
                                            final String stateDir) {

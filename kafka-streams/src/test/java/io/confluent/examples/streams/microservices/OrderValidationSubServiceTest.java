@@ -18,10 +18,10 @@ import static io.confluent.examples.streams.avro.microservices.ProductType.UNDER
 import static java.util.Arrays.asList;
 import static org.assertj.core.api.Assertions.assertThat;
 
-public class OrdersServiceTest extends MicroserviceTestUtils {
+public class OrderValidationSubServiceTest extends MicroserviceTestUtils {
     private List<Order> orders;
     private List<OrderValidation> ruleResults;
-    private OrdersService ordersService;
+    private OrderValidationSubService ordersService;
 
 
     @BeforeClass
@@ -35,7 +35,7 @@ public class OrdersServiceTest extends MicroserviceTestUtils {
     public void shouldAggregateRuleSuccesses() throws Exception {
 
         //Given
-        ordersService = new OrdersService();
+        ordersService = new OrderValidationSubService();
 
         orders = asList(
                 new Order(0L, 0L, CREATED, UNDERPANTS, 3, 5.00d),

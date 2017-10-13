@@ -18,6 +18,8 @@ import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.streams.KeyValue;
 import org.junit.ClassRule;
 
+import java.io.IOException;
+import java.net.ServerSocket;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
@@ -37,7 +39,7 @@ public class MicroserviceTestUtils {
             new KeyValue(KafkaConfig.TransactionsTopicReplicationFactorProp(), "1"),
             new KeyValue(KafkaConfig.TransactionsTopicMinISRProp(), "1"),
             new KeyValue(KafkaConfig.TransactionsTopicPartitionsProp(), "1"),
-            new KeyValue(KafkaConfig.LogMessageTimestampTypeProp(), "LogAppendTime") //TODO probably shoudln't leave this here
+            new KeyValue(KafkaConfig.LogMessageTimestampTypeProp(), "LogAppendTime") //TODO probably shouldn't leave this here
     ));
 
     protected static Properties producerConfig(EmbeddedSingleNodeKafkaCluster cluster) {
@@ -123,7 +125,7 @@ public class MicroserviceTestUtils {
     }
 
     public static void stopTailers() {
-        tailers.stream().forEach((t) -> t.stop());
+        tailers.forEach(TopicTailer::stop);
     }
 
     public static void tailAllTopicsToConsole(String bootstrapServers) {
@@ -170,7 +172,7 @@ public class MicroserviceTestUtils {
         void stop() {
             running = false;
             while (!closed) try {
-                Thread.sleep(50);
+                Thread.sleep(200);
                 System.out.println("Closing tailer...");
             } catch (InterruptedException e) {
             }
@@ -192,9 +194,7 @@ public class MicroserviceTestUtils {
         for (Order order : orders)
             try {
                 ordersProducer.send(new ProducerRecord(Schemas.Topics.ORDERS.name(), order.getId(), order)).get();
-            } catch (InterruptedException e) {
-                e.printStackTrace();
-            } catch (ExecutionException e) {
+            } catch (InterruptedException | ExecutionException e) {
                 e.printStackTrace();
             }
         ordersProducer.close();
@@ -205,9 +205,7 @@ public class MicroserviceTestUtils {
         for (OrderValidation ov : orderValidations)
             try {
                 ordersProducer.send(new ProducerRecord(Schemas.Topics.ORDER_VALIDATIONS.name(), ov.getOrderId(), ov)).get();
-            } catch (InterruptedException e) {
-                e.printStackTrace();
-            } catch (ExecutionException e) {
+            } catch (InterruptedException | ExecutionException e) {
                 e.printStackTrace();
             }
         ordersProducer.close();
@@ -218,12 +216,17 @@ public class MicroserviceTestUtils {
         for (KeyValue kv : inventory)
             try {
                 stockProducer.send(new ProducerRecord(Schemas.Topics.WAREHOUSE_INVENTORY.name(), kv.key, kv.value)).get();
-            } catch (InterruptedException e) {
-                e.printStackTrace();
-            } catch (ExecutionException e) {
+            } catch (InterruptedException | ExecutionException e) {
                 e.printStackTrace();
             }
         stockProducer.close();
+    }
+
+    public static int randomFreeLocalPort() throws IOException {
+        ServerSocket s = new ServerSocket(0);
+        int port = s.getLocalPort();
+        s.close();
+        return port;
     }
 
 }

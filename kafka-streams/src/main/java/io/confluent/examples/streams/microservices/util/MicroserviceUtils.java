@@ -58,7 +58,7 @@ public class MicroserviceUtils {
         }
     }
 
-    //TODO - how do I serialise an java Enum in streams without writing a serialiser myself?
+    //Streams doesn't provide an Enum serdes so just create one here.
     public static final class ProductTypeSerde implements Serde<ProductType> {
 
         @Override

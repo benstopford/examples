@@ -31,8 +31,6 @@ public class OrderValidationSubService implements Service {
         System.out.println("Started Service " + getClass().getSimpleName());
     }
 
-    //TODO change validationresult.getpassed to something more explicit like validationresult
-
     private KafkaStreams aggregateOrderValidations(String bootstrapServers, String stateDir) {
         final int numberOfRules = 3; //TODO put into a ktable
 
@@ -45,7 +43,7 @@ public class OrderValidationSubService implements Service {
         validations.groupByKey(ORDER_VALIDATIONS.keySerde(), ORDER_VALIDATIONS.valueSerde())
                 .aggregate(
                         () -> 0L,
-                        (id, result, total) -> PASS.equals(result.getPassed()) ? total + 1 : total,
+                        (id, result, total) -> PASS.equals(result.getValidationResult()) ? total + 1 : total,
                         TimeWindows.of(30 * 60 * 1000L), //TODO if the window is on the epoch then this is going to fail periodically unless it is sliding. is it sliding?
                         Serdes.Long()
                 )
@@ -58,7 +56,7 @@ public class OrderValidationSubService implements Service {
                 .to(ORDERS.keySerde(), ORDERS.valueSerde(), ORDERS.name());
 
         //If any rule fails then fail the order
-        validations.filter((orderId, rule) -> FAIL.equals(rule.getPassed()))
+        validations.filter((orderId, rule) -> FAIL.equals(rule.getValidationResult()))
                 .join(orders, (aLong, order) -> newBuilder(order).setState(OrderType.FAILED).build(), JoinWindows.of(3000 * 1000L), ORDERS.keySerde(), ORDER_VALIDATIONS.valueSerde(), ORDERS.valueSerde())
                 .groupByKey(ORDERS.keySerde(), ORDERS.valueSerde())
                 .reduce((order, v1) -> order)

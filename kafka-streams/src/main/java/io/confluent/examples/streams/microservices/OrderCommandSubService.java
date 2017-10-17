@@ -43,7 +43,6 @@ public class OrderCommandSubService implements OrderCommand, Service {
 
     @Override
     public OrderCommandResult putOrderAndWait(Order order) {
-        //todo make this order.requestId()
         try {
             //Send the order synchronously
             producer.send(new ProducerRecord<>(Schemas.Topics.ORDERS.name(), order.getId(), order)).get();
@@ -51,7 +50,8 @@ public class OrderCommandSubService implements OrderCommand, Service {
             //Create a latch and pass it in the callback
             CountDownLatch latch = new CountDownLatch(1);
 
-            //We use the orderId to identify the request. This assumes it is unique. In a real system we'd enforce a version or GUID
+            //We use the orderId to identify the request. This assumes it is unique. In a real system we'd enforce a version or GUID.
+            //For bonus performance points put the ID in the msg header so the message does not need to be deserialized to be filtered.
             PostCallback callback = callback(latch);
             outstandingRequests.put(order.getId(), callback);
 

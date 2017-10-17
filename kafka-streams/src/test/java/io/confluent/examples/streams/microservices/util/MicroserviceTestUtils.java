@@ -13,6 +13,7 @@ import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
+import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.LongDeserializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.streams.KeyValue;
@@ -70,17 +71,25 @@ public class MicroserviceTestUtils {
     }
 
     public static <K, V> List<KeyValue<K, V>> readKeyValues(Schemas.Topic<K, V> topic, int numberToRead, String bootstrapServers) throws InterruptedException {
+        Deserializer<K> keyDes = topic.keySerde().deserializer();
+        Deserializer<V> valDes = topic.valueSerde().deserializer();
+        String topicName = topic.name();
+        return readKeyValues3(numberToRead, bootstrapServers, keyDes, valDes, topicName);
+    }
+
+    public static <K, V> List<KeyValue<K, V>> readKeyValues3(int numberToRead, String bootstrapServers, Deserializer<K> keyDes, Deserializer<V> valDes, String topicName) throws InterruptedException {
         Properties consumerConfig = new Properties();
         consumerConfig.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
         consumerConfig.put(ConsumerConfig.GROUP_ID_CONFIG, "Test-Reader-" + consumerCounter++);
         consumerConfig.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
 
-        KafkaConsumer<K, V> consumer = new KafkaConsumer(consumerConfig, topic.keySerde().deserializer(), topic.valueSerde().deserializer());
-        consumer.subscribe(singletonList(topic.name()));
+        KafkaConsumer<K, V> consumer = new KafkaConsumer(consumerConfig, keyDes, valDes);
+        consumer.subscribe(singletonList(topicName));
 
         List<KeyValue<K, V>> actualValues = new ArrayList<>();
         org.apache.kafka.test.TestUtils.waitForCondition(() -> {
             ConsumerRecords<K, V> records = consumer.poll(100);
+            System.out.println("Found something " + records.count());
             for (ConsumerRecord<K, V> record : records) {
                 actualValues.add(KeyValue.pair(record.key(), record.value()));
             }
@@ -89,6 +98,7 @@ public class MicroserviceTestUtils {
         consumer.close();
         return actualValues;
     }
+
 
     public static <K, V> List<KeyValue<K, V>> readKeyValues2(int numberToRead, KafkaConsumer<K, V> consumer) throws InterruptedException {
 

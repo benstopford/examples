@@ -189,4 +189,8 @@ public class EmbeddedSingleNodeKafkaCluster extends ExternalResource {
     public boolean isRunning() {
         return running;
     }
+
+    public void printTopics() {
+        broker.printTopics();
+    }
 }

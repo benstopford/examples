@@ -16,6 +16,7 @@ import org.apache.kafka.common.utils.Time;
 import org.junit.rules.TemporaryFolder;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import scala.collection.Map;
 
 import java.io.File;
 import java.io.IOException;
@@ -157,7 +158,21 @@ public class KafkaEmbedded {
     boolean isSecure = false;
     ZkUtils zkUtils = new ZkUtils(zkClient, new ZkConnection(zookeeperConnect()), isSecure);
     AdminUtils.createTopic(zkUtils, topic, partitions, replication, topicConfig, RackAwareMode.Enforced$.MODULE$);
+
     zkClient.close();
+  }
+
+    public void printTopics() {
+        ZkClient zkClient = new ZkClient(
+                zookeeperConnect(),
+                DEFAULT_ZK_SESSION_TIMEOUT_MS,
+                DEFAULT_ZK_CONNECTION_TIMEOUT_MS,
+                ZKStringSerializer$.MODULE$);
+        boolean isSecure = false;
+        ZkUtils zkUtils = new ZkUtils(zkClient, new ZkConnection(zookeeperConnect()), isSecure);
+        Map<String, Properties> stringPropertiesMap = AdminUtils.fetchAllTopicConfigs(zkUtils);
+        System.out.println("All topic configs " + stringPropertiesMap);
+
   }
 
 }

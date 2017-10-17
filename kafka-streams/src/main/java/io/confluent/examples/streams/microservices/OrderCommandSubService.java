@@ -72,13 +72,13 @@ public class OrderCommandSubService implements OrderCommand, Service {
             boolean succeeded;
 
             @Override
-            public void received(boolean succeeded) {
+            public synchronized void received(boolean succeeded) {
                 this.succeeded = succeeded;
                 latch.countDown();
             }
 
             @Override
-            public boolean succeeded() {
+            public synchronized boolean succeeded() {
                 return succeeded;
             }
         };

@@ -1,9 +1,11 @@
-package io.confluent.examples.streams.microservices;
+package io.confluent.examples.streams.microservices.fraud;
 
 import io.confluent.examples.streams.avro.microservices.Order;
 import io.confluent.examples.streams.avro.microservices.OrderType;
 import io.confluent.examples.streams.avro.microservices.OrderValidation;
 import io.confluent.examples.streams.avro.microservices.OrderValue;
+import io.confluent.examples.streams.microservices.Schemas;
+import io.confluent.examples.streams.microservices.Service;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.StreamsConfig;
@@ -110,7 +112,7 @@ public class FraudService implements Service {
                 .aggregate(
                         () -> 0D,
                         (custId, order, total) -> total + order.getQuantity() * order.getPrice(),
-                        TimeWindows.of(60 * 1000L), //TODO - why doesn't it work if we make this big?
+                        TimeWindows.of(60 * 1000L),
                         Serdes.Double());
 
         //Convert to a stream to remove the window from the key
@@ -124,7 +126,7 @@ public class FraudService implements Service {
         totalsByCustomer.print("totalsByCustomer");
 
         //Join the orders back to the table of totals
-        KStream<Long, OrderValue> orderAndAmount = ordersByCustId  //TODO why does this create duplicates?
+        KStream<Long, OrderValue> orderAndAmount = ordersByCustId
                 .join(totalsByCustomer, OrderValue::new
                         , JoinWindows.of(3000 * 1000L), Serdes.Long(), Schemas.ORDER_VALUE_SERDE, Serdes.Double());
 

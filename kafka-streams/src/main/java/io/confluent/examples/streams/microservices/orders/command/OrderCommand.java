@@ -1,4 +1,4 @@
-package io.confluent.examples.streams.microservices;
+package io.confluent.examples.streams.microservices.orders.command;
 
 import io.confluent.examples.streams.avro.microservices.Order;
 

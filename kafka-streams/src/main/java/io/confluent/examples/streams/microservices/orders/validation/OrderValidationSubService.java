@@ -1,8 +1,9 @@
-package io.confluent.examples.streams.microservices;
+package io.confluent.examples.streams.microservices.orders.validation;
 
 import io.confluent.examples.streams.avro.microservices.Order;
 import io.confluent.examples.streams.avro.microservices.OrderType;
 import io.confluent.examples.streams.avro.microservices.OrderValidation;
+import io.confluent.examples.streams.microservices.Service;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.kstream.JoinWindows;

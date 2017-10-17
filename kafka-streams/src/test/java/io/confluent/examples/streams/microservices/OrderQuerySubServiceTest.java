@@ -1,6 +1,7 @@
 package io.confluent.examples.streams.microservices;
 
 import io.confluent.examples.streams.avro.microservices.Order;
+import io.confluent.examples.streams.microservices.orders.query.OrderQuerySubService;
 import io.confluent.examples.streams.microservices.util.MicroserviceTestUtils;
 import org.apache.kafka.test.TestUtils;
 import org.junit.After;

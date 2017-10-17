@@ -1,10 +1,11 @@
-package io.confluent.examples.streams.microservices;
+package io.confluent.examples.streams.microservices.inventory;
 
 import io.confluent.examples.streams.avro.microservices.Order;
 import io.confluent.examples.streams.avro.microservices.OrderType;
 import io.confluent.examples.streams.avro.microservices.OrderValidation;
 import io.confluent.examples.streams.avro.microservices.ProductType;
 import io.confluent.examples.streams.microservices.Schemas.Topics;
+import io.confluent.examples.streams.microservices.Service;
 import io.confluent.examples.streams.microservices.util.MicroserviceUtils;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;

@@ -1,8 +1,10 @@
-package io.confluent.examples.streams.microservices;
+package io.confluent.examples.streams.microservices.orders.rest;
 
 import io.confluent.examples.streams.avro.microservices.Order;
 import io.confluent.examples.streams.interactivequeries.HostStoreInfo;
-import io.confluent.examples.streams.microservices.rest.OrderBean;
+import io.confluent.examples.streams.microservices.orders.beans.OrderBean;
+import io.confluent.examples.streams.microservices.orders.command.OrderCommand;
+import io.confluent.examples.streams.microservices.orders.query.OrderQuery;
 import org.apache.kafka.streams.state.HostInfo;
 import org.eclipse.jetty.server.Server;
 import org.eclipse.jetty.servlet.ServletContextHandler;

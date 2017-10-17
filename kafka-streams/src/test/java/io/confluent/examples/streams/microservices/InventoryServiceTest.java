@@ -2,6 +2,7 @@ package io.confluent.examples.streams.microservices;
 
 import io.confluent.examples.streams.IntegrationTestUtils;
 import io.confluent.examples.streams.avro.microservices.*;
+import io.confluent.examples.streams.microservices.inventory.InventoryService;
 import io.confluent.examples.streams.microservices.util.MicroserviceTestUtils;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.processor.internals.ProcessorStateManager;

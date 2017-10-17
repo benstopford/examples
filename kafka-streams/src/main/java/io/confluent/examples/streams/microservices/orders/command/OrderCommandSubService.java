@@ -1,7 +1,9 @@
-package io.confluent.examples.streams.microservices;
+package io.confluent.examples.streams.microservices.orders.command;
 
 import io.confluent.examples.streams.avro.microservices.Order;
 import io.confluent.examples.streams.avro.microservices.OrderType;
+import io.confluent.examples.streams.microservices.Schemas;
+import io.confluent.examples.streams.microservices.Service;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
@@ -15,7 +17,6 @@ import java.util.Properties;
 import java.util.UUID;
 import java.util.concurrent.*;
 
-import static io.confluent.examples.streams.microservices.OrderCommand.OrderCommandResult.*;
 import static java.util.Collections.singletonList;
 
 public class OrderCommandSubService implements OrderCommand, Service {
@@ -58,13 +59,13 @@ public class OrderCommandSubService implements OrderCommand, Service {
             //Await the callback (called when the message is consumed)
             latch.await(10, TimeUnit.SECONDS);
 
-            return latch.getCount() > 0 ? TIMED_OUT :
-                    callback.succeeded() ? SUCCESS : FAILED_VALIDATION;
+            return latch.getCount() > 0 ? OrderCommandResult.TIMED_OUT :
+                    callback.succeeded() ? OrderCommandResult.SUCCESS : OrderCommandResult.FAILED_VALIDATION;
 
         } catch (InterruptedException | ExecutionException e) {
             e.printStackTrace();
         }
-        return UNKNOWN_FAILURE;
+        return OrderCommandResult.UNKNOWN_FAILURE;
     }
 
     private PostCallback callback(final CountDownLatch latch) {

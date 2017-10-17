@@ -1,5 +1,11 @@
-package io.confluent.examples.streams.microservices;
+package io.confluent.examples.streams.microservices.orders;
 
+import io.confluent.examples.streams.microservices.Schemas;
+import io.confluent.examples.streams.microservices.Service;
+import io.confluent.examples.streams.microservices.orders.command.OrderCommandSubService;
+import io.confluent.examples.streams.microservices.orders.query.OrderQuerySubService;
+import io.confluent.examples.streams.microservices.orders.rest.OrdersRestInterface;
+import io.confluent.examples.streams.microservices.orders.validation.OrderValidationSubService;
 import org.apache.kafka.streams.state.HostInfo;
 
 import java.io.IOException;

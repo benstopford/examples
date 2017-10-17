@@ -1,6 +1,7 @@
 package io.confluent.examples.streams.microservices;
 
 import io.confluent.examples.streams.avro.microservices.Order;
+import io.confluent.examples.streams.microservices.orders.command.OrderCommandSubService;
 import io.confluent.examples.streams.microservices.util.MicroserviceTestUtils;
 import org.junit.After;
 import org.junit.BeforeClass;
@@ -13,7 +14,7 @@ import java.util.concurrent.TimeUnit;
 
 import static io.confluent.examples.streams.avro.microservices.OrderType.*;
 import static io.confluent.examples.streams.avro.microservices.ProductType.UNDERPANTS;
-import static io.confluent.examples.streams.microservices.OrderCommand.OrderCommandResult;
+import static io.confluent.examples.streams.microservices.orders.command.OrderCommand.OrderCommandResult;
 import static java.util.Arrays.asList;
 import static org.assertj.core.api.Assertions.assertThat;
 

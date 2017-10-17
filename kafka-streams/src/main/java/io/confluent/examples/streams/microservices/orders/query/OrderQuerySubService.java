@@ -1,8 +1,9 @@
-package io.confluent.examples.streams.microservices;
+package io.confluent.examples.streams.microservices.orders.query;
 
 import io.confluent.examples.streams.avro.microservices.Order;
 import io.confluent.examples.streams.interactivequeries.HostStoreInfo;
 import io.confluent.examples.streams.interactivequeries.MetadataService;
+import io.confluent.examples.streams.microservices.Service;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;

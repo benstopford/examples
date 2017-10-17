@@ -20,11 +20,12 @@ import static java.util.Collections.singletonList;
 
 public class OrderCommandSubService implements OrderCommand, Service {
 
-    public final String CONSUMER_GROUP_ID = getClass().getSimpleName() + ":" + UUID.randomUUID();
+    public final String UNIQUE_CONSUMER_GROUP_ID = getClass().getSimpleName() + ":" + UUID.randomUUID();
     private KafkaConsumer<Long, Order> consumer;
     private KafkaProducer<Long, Order> producer;
     private ExecutorService executorService = Executors.newSingleThreadExecutor();
     private volatile boolean running = false;
+    //In a real implementation we would need to periodically purge old entries from this map.
     private Map<Long, PostCallback> outstandingRequests = new ConcurrentHashMap();
 
     interface PostCallback {
@@ -50,6 +51,7 @@ public class OrderCommandSubService implements OrderCommand, Service {
             //Create a latch and pass it in the callback
             CountDownLatch latch = new CountDownLatch(1);
 
+            //We use the orderId to identify the request. This assumes it is unique. In a real system we'd enforce a version or GUID
             PostCallback callback = callback(latch);
             outstandingRequests.put(order.getId(), callback);
 
@@ -132,7 +134,7 @@ public class OrderCommandSubService implements OrderCommand, Service {
     private void startConsumer(String bootstrapServers) {
         Properties consumerConfig = new Properties();
         consumerConfig.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
-        consumerConfig.put(ConsumerConfig.GROUP_ID_CONFIG, CONSUMER_GROUP_ID);
+        consumerConfig.put(ConsumerConfig.GROUP_ID_CONFIG, UNIQUE_CONSUMER_GROUP_ID);
         consumerConfig.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         consumerConfig.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "true");
 

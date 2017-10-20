@@ -5,7 +5,7 @@ import io.confluent.examples.streams.avro.microservices.OrderType;
 import io.confluent.examples.streams.avro.microservices.ProductType;
 
 public class OrderBean {
-    private long id;
+    private String id;
     private long customerId;
     private OrderType state;
     private ProductType product;
@@ -16,7 +16,7 @@ public class OrderBean {
 
     }
 
-    public OrderBean(long id, long customerId, OrderType state, ProductType product, int quantity, double price) {
+    public OrderBean(String id, long customerId, OrderType state, ProductType product, int quantity, double price) {
         this.id = id;
         this.customerId = customerId;
         this.state = state;
@@ -25,7 +25,7 @@ public class OrderBean {
         this.price = price;
     }
 
-    public long getId() {
+    public String getId() {
         return id;
     }
 
@@ -49,38 +49,8 @@ public class OrderBean {
         return price;
     }
 
-    public void setId(long id) {
+    public void setId(String id) {
         this.id = id;
-    }
-
-    @Override
-    public boolean equals(Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
-
-        OrderBean orderBean = (OrderBean) o;
-
-        if (id != orderBean.id) return false;
-        if (customerId != orderBean.customerId) return false;
-        if (quantity != orderBean.quantity) return false;
-        if (Double.compare(orderBean.price, price) != 0) return false;
-        if (state != orderBean.state) return false;
-        return product == orderBean.product;
-
-    }
-
-    @Override
-    public int hashCode() {
-        int result;
-        long temp;
-        result = (int) (id ^ (id >>> 32));
-        result = 31 * result + (int) (customerId ^ (customerId >>> 32));
-        result = 31 * result + (state != null ? state.hashCode() : 0);
-        result = 31 * result + (product != null ? product.hashCode() : 0);
-        result = 31 * result + quantity;
-        temp = Double.doubleToLongBits(price);
-        result = 31 * result + (int) (temp ^ (temp >>> 32));
-        return result;
     }
 
     @Override
@@ -93,6 +63,36 @@ public class OrderBean {
                 ", quantity=" + quantity +
                 ", price=" + price +
                 '}';
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+
+        OrderBean orderBean = (OrderBean) o;
+
+        if (customerId != orderBean.customerId) return false;
+        if (quantity != orderBean.quantity) return false;
+        if (Double.compare(orderBean.price, price) != 0) return false;
+        if (id != null ? !id.equals(orderBean.id) : orderBean.id != null) return false;
+        if (state != orderBean.state) return false;
+        return product == orderBean.product;
+
+    }
+
+    @Override
+    public int hashCode() {
+        int result;
+        long temp;
+        result = id != null ? id.hashCode() : 0;
+        result = 31 * result + (int) (customerId ^ (customerId >>> 32));
+        result = 31 * result + (state != null ? state.hashCode() : 0);
+        result = 31 * result + (product != null ? product.hashCode() : 0);
+        result = 31 * result + quantity;
+        temp = Double.doubleToLongBits(price);
+        result = 31 * result + (int) (temp ^ (temp >>> 32));
+        return result;
     }
 
     public static OrderBean toBean(Order order) {

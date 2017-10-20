@@ -13,7 +13,7 @@
  "type": "record",
  "name": "OrderValidation",
  "fields": [
-     {"name": "orderId", "type": "long"},
+     {"name": "orderId", "type": "string"},
      {"name": "checkType", "type": "OrderValidationType"},
      {"name": "validationResult",  "type": "OrderValidationResult"}
  ]

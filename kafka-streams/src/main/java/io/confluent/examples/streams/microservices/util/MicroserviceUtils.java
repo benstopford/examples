@@ -10,12 +10,21 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.state.RocksDBConfigSetter;
 import org.rocksdb.Options;
 
+import java.io.IOException;
+import java.net.ServerSocket;
 import java.util.Map;
 import java.util.Properties;
 
 public class MicroserviceUtils {
     public static final String DEFAULT_BOOTSTRAP_SERVERS = "localhost:9092";
     public static final String DEFAULT_SCHEMA_REGISTRY_URL = "http://localhost:8081";
+
+    public static int randomFreeLocalPort() throws IOException {
+        ServerSocket s = new ServerSocket(0);
+        int port = s.getLocalPort();
+        s.close();
+        return port;
+    }
 
     public static String initSchemaRegistryAndGetBootstrapServers(String[] args) {
         if (args.length > 2) {
@@ -32,7 +41,7 @@ public class MicroserviceUtils {
         return bootstrapServers;
     }
 
-    public static Properties streamsConfig(String bootstrapServers, String stateDir, String appId) {
+    public static Properties baseStreamsConfig(String bootstrapServers, String stateDir, String appId) {
         Properties config = new Properties();
         // Workaround for a known issue with RocksDB in environments where you have only 1 cpu core.
         config.put(StreamsConfig.ROCKSDB_CONFIG_SETTER_CLASS_CONFIG, CustomRocksDBConfig.class);

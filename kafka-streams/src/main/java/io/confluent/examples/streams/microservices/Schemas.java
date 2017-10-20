@@ -50,16 +50,16 @@ public class Schemas {
 
     public static class Topics {
         public static Map<String, Topic> ALL = new HashMap<>();
-        public static Topic<Long, Order> ORDERS;
+        public static Topic<String, Order> ORDERS;
         public static Topic<ProductType, Integer> WAREHOUSE_INVENTORY;
-        public static Topic<Long, OrderValidation> ORDER_VALIDATIONS;
+        public static Topic<String, OrderValidation> ORDER_VALIDATIONS;
         static {
             createTopics();
         }
 
         private static void createTopics() {
-            ORDERS = new Topic<>("orders", Serdes.Long(), new SpecificAvroSerde<Order>());
-            ORDER_VALIDATIONS = new Topic<>("order-validations", Serdes.Long(), new SpecificAvroSerde<OrderValidation>());
+            ORDERS = new Topic<>("orders", Serdes.String(), new SpecificAvroSerde<Order>());
+            ORDER_VALIDATIONS = new Topic<>("order-validations", Serdes.String(), new SpecificAvroSerde<OrderValidation>());
             WAREHOUSE_INVENTORY = new Topic<>("warehouse-inventory", new ProductTypeSerde(), Serdes.Integer());
             ORDER_VALUE_SERDE = new SpecificAvroSerde<OrderValue>();
         }

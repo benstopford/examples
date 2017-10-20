@@ -3,7 +3,9 @@ package io.confluent.examples.streams.microservices;
 import io.confluent.examples.streams.avro.microservices.Order;
 import io.confluent.examples.streams.microservices.orders.query.OrderQuerySubService;
 import io.confluent.examples.streams.microservices.util.MicroserviceTestUtils;
-import org.apache.kafka.test.TestUtils;
+import io.confluent.examples.streams.microservices.util.MicroserviceUtils;
+import io.confluent.examples.streams.microservices.util.StubAsyncResponse;
+import org.apache.kafka.streams.state.HostInfo;
 import org.junit.After;
 import org.junit.BeforeClass;
 import org.junit.Test;
@@ -11,12 +13,16 @@ import org.junit.Test;
 import java.io.IOException;
 
 import static io.confluent.examples.streams.avro.microservices.OrderType.CREATED;
+import static io.confluent.examples.streams.avro.microservices.OrderType.VALIDATED;
 import static io.confluent.examples.streams.avro.microservices.ProductType.UNDERPANTS;
+import static io.confluent.examples.streams.microservices.orders.beans.OrderBean.toBean;
+import static io.confluent.examples.streams.microservices.orders.beans.OrderId.id;
 import static java.util.Arrays.asList;
+import static org.apache.kafka.test.TestUtils.waitForCondition;
 import static org.assertj.core.api.Assertions.assertThat;
 
 public class OrderQuerySubServiceTest extends MicroserviceTestUtils {
-    OrderQuerySubService service = new OrderQuerySubService();
+    OrderQuerySubService service;
 
     @BeforeClass
     public static void startKafkaCluster() throws Exception {
@@ -32,18 +38,23 @@ public class OrderQuerySubServiceTest extends MicroserviceTestUtils {
 
     @Test
     public void shouldGetOrder() throws IOException, InterruptedException {
-        //Given
-        Order sent = new Order(1L, 1L, CREATED, UNDERPANTS, 3, 10.00d);
-        service.start(CLUSTER.bootstrapServers());
-        sendOrders(asList(sent));
+        service = new OrderQuerySubService(new HostInfo("localhost", MicroserviceUtils.randomFreeLocalPort()));
+        Order ceatedOrder = new Order(id(0L), 1L, CREATED, UNDERPANTS, 3, 10.00d);
+        Order validatedOrder = new Order(id(1L), 1L, VALIDATED, UNDERPANTS, 3, 10.00d);
 
-        //Wait for data to be available
-        TestUtils.waitForCondition(() -> service.getOrder(1L) != null, 30000, "timed out reading state store");
+        //Given
+        service.start(CLUSTER.bootstrapServers());
+        sendOrders(asList(ceatedOrder));
+
+        StubAsyncResponse stubAsyncResponse = new StubAsyncResponse();
 
         //When
-        Order result = service.getOrder(1L);
+        service.getOrder(id(1L), stubAsyncResponse);
+        sendOrders(asList(validatedOrder));
+
+        waitForCondition(() -> stubAsyncResponse.isDone(), 5000, "timed out reading state store");
 
         //Then
-        assertThat(result).isEqualTo(sent);
+        assertThat(stubAsyncResponse.response).isEqualTo(toBean(validatedOrder));
     }
 }

@@ -19,8 +19,6 @@ import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.streams.KeyValue;
 import org.junit.ClassRule;
 
-import java.io.IOException;
-import java.net.ServerSocket;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
@@ -231,12 +229,4 @@ public class MicroserviceTestUtils {
             }
         stockProducer.close();
     }
-
-    public static int randomFreeLocalPort() throws IOException {
-        ServerSocket s = new ServerSocket(0);
-        int port = s.getLocalPort();
-        s.close();
-        return port;
-    }
-
 }

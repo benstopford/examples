@@ -17,6 +17,7 @@ import static io.confluent.examples.streams.avro.microservices.OrderValidationTy
 import static io.confluent.examples.streams.avro.microservices.ProductType.JUMPERS;
 import static io.confluent.examples.streams.avro.microservices.ProductType.UNDERPANTS;
 import static io.confluent.examples.streams.microservices.Schemas.Topics;
+import static io.confluent.examples.streams.microservices.orders.beans.OrderId.id;
 import static java.util.Arrays.asList;
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -51,14 +52,14 @@ public class FraudServiceTest extends MicroserviceTestUtils {
         fraudService = new FraudService();
 
         orders = asList(
-                new Order(0L, 0L, CREATED, UNDERPANTS, 3, 5.00d),
-                new Order(1L, 0L, CREATED, JUMPERS, 1, 75.00d), //customer 0 => pass
-                new Order(2L, 1L, CREATED, JUMPERS, 1, 75.00d),
-                new Order(3L, 1L, CREATED, JUMPERS, 1, 75.00d),
-                new Order(4L, 1L, CREATED, JUMPERS, 50, 75.00d), //customer 1 => fail
-                new Order(5L, 2L, CREATED, JUMPERS, 1, 75.00d),
-                new Order(6L, 2L, CREATED, UNDERPANTS, 2000, 5.00d), //customer 2 => fail
-                new Order(7L, 3L, CREATED, UNDERPANTS, 1, 5.00d)  //customer 3 => pass
+                new Order(id(0L), 0L, CREATED, UNDERPANTS, 3, 5.00d),
+                new Order(id(1L), 0L, CREATED, JUMPERS, 1, 75.00d), //customer 0 => pass
+                new Order(id(2L), 1L, CREATED, JUMPERS, 1, 75.00d),
+                new Order(id(3L), 1L, CREATED, JUMPERS, 1, 75.00d),
+                new Order(id(4L), 1L, CREATED, JUMPERS, 50, 75.00d), //customer 1 => fail
+                new Order(id(5L), 2L, CREATED, JUMPERS, 1, 75.00d),
+                new Order(id(6L), 2L, CREATED, UNDERPANTS, 2000, 5.00d), //customer 2 => fail
+                new Order(id(7L), 3L, CREATED, UNDERPANTS, 1, 5.00d)  //customer 3 => pass
         );
         sendOrders(orders);
 
@@ -67,14 +68,14 @@ public class FraudServiceTest extends MicroserviceTestUtils {
 
         //Then the final order for Jumpers should have been 'rejected' as it's out of stock
         expected = asList(
-                new OrderValidation(0L, FRAUD_CHECK, PASS),
-                new OrderValidation(1L, FRAUD_CHECK, PASS),
-                new OrderValidation(2L, FRAUD_CHECK, PASS),
-                new OrderValidation(3L, FRAUD_CHECK, PASS),
-                new OrderValidation(4L, FRAUD_CHECK, FAIL),
-                new OrderValidation(5L, FRAUD_CHECK, PASS),
-                new OrderValidation(6L, FRAUD_CHECK, FAIL),
-                new OrderValidation(7L, FRAUD_CHECK, PASS)
+                new OrderValidation(id(0L), FRAUD_CHECK, PASS),
+                new OrderValidation(id(1L), FRAUD_CHECK, PASS),
+                new OrderValidation(id(2L), FRAUD_CHECK, PASS),
+                new OrderValidation(id(3L), FRAUD_CHECK, PASS),
+                new OrderValidation(id(4L), FRAUD_CHECK, FAIL),
+                new OrderValidation(id(5L), FRAUD_CHECK, PASS),
+                new OrderValidation(id(6L), FRAUD_CHECK, FAIL),
+                new OrderValidation(id(7L), FRAUD_CHECK, PASS)
         );
         assertThat(MicroserviceTestUtils.read(Topics.ORDER_VALIDATIONS, 8, CLUSTER.bootstrapServers())).isEqualTo(expected);
     }

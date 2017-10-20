@@ -27,8 +27,8 @@ import static java.util.Collections.singletonList;
 
 public class OrderDetailsValidationService implements Service {
     public static final String CONSUMER_GROUP_ID = "OrderValidationService";
-    private KafkaConsumer<Long, Order> consumer;
-    private KafkaProducer<Long, OrderValidation> producer;
+    private KafkaConsumer<String, Order> consumer;
+    private KafkaProducer<String, OrderValidation> producer;
     private ExecutorService executorService = Executors.newSingleThreadExecutor();
     private boolean running = false;
 
@@ -49,9 +49,9 @@ public class OrderDetailsValidationService implements Service {
             producer.initTransactions();
 
             while (running) {
-                ConsumerRecords<Long, Order> records = consumer.poll(100);
+                ConsumerRecords<String, Order> records = consumer.poll(100);
                 producer.beginTransaction();
-                for (ConsumerRecord<Long, Order> record : records) {
+                for (ConsumerRecord<String, Order> record : records) {
                     Order order = record.value();
                     if (OrderType.CREATED.equals(order.getState())) {
                         producer.send(result(order, isValid(order) ? PASS : FAIL));
@@ -66,11 +66,11 @@ public class OrderDetailsValidationService implements Service {
         }
     }
 
-    private void recordOffset(Map<TopicPartition, OffsetAndMetadata> consumedOffsets, ConsumerRecord<Long, Order> record) {
+    private void recordOffset(Map<TopicPartition, OffsetAndMetadata> consumedOffsets, ConsumerRecord<String, Order> record) {
         consumedOffsets.put(new TopicPartition(record.topic(), record.partition()), new OffsetAndMetadata(record.offset()));
     }
 
-    private ProducerRecord<Long, OrderValidation> result(Order order, OrderValidationResult passOrFail) {
+    private ProducerRecord<String, OrderValidation> result(Order order, OrderValidationResult passOrFail) {
         return new ProducerRecord<>(
                 Topics.ORDER_VALIDATIONS.name(),
                 order.getId(),
@@ -116,9 +116,9 @@ public class OrderDetailsValidationService implements Service {
         try {
             executorService.awaitTermination(1000, TimeUnit.MILLISECONDS);
         } catch (InterruptedException e) {
-            System.out.println("Failed to stop " + getClass().getName() + " in 1000ms");
+            System.out.println("Failed to stop " + getClass().getSimpleName() + " in 1000ms");
         }
-        System.out.println(getClass().getName() + " was stopped");
+        System.out.println(getClass().getSimpleName() + " was stopped");
     }
 
     private boolean isValid(Order order) {

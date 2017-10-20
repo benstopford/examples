@@ -5,15 +5,14 @@ import io.confluent.examples.streams.microservices.Service;
 import io.confluent.examples.streams.microservices.orders.command.OrderCommandSubService;
 import io.confluent.examples.streams.microservices.orders.query.OrderQuerySubService;
 import io.confluent.examples.streams.microservices.orders.rest.OrdersRestInterface;
-import io.confluent.examples.streams.microservices.orders.validation.OrderValidationSubService;
+import io.confluent.examples.streams.microservices.orders.validation.OrderValidationRuleAggregatorSubService;
 import org.apache.kafka.streams.state.HostInfo;
 
-import java.io.IOException;
-import java.net.ServerSocket;
+import static io.confluent.examples.streams.microservices.util.MicroserviceUtils.randomFreeLocalPort;
 
 public class OrdersService implements Service {
 
-    private OrderValidationSubService validation;
+    private OrderValidationRuleAggregatorSubService validation;
     private OrderQuerySubService queries;
     private OrderCommandSubService commands;
     private String host;
@@ -28,13 +27,13 @@ public class OrdersService implements Service {
     @Override
     public void start(String bootstrapServers) {
         try {
-            validation = new OrderValidationSubService();
+            validation = new OrderValidationRuleAggregatorSubService();
             validation.start(bootstrapServers);
 
             commands = new OrderCommandSubService();
             commands.start(bootstrapServers);
 
-            queries = new OrderQuerySubService();
+            queries = new OrderQuerySubService(new HostInfo(host, restPort));
             queries.start(bootstrapServers);
 
             restInterface = new OrdersRestInterface(new HostInfo(host, restPort), commands, queries);
@@ -77,12 +76,5 @@ public class OrdersService implements Service {
             } catch (Exception ignored) {
             }
         }));
-    }
-
-    public static int randomFreeLocalPort() throws IOException {
-        ServerSocket s = new ServerSocket(0);
-        int port = s.getLocalPort();
-        s.close();
-        return port;
     }
 }

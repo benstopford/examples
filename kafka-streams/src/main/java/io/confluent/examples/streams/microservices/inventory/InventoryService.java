@@ -50,7 +50,7 @@ public class InventoryService implements Service {
 
         //Latch onto instances of the orders and inventory topics
         KStreamBuilder builder = new KStreamBuilder();
-        KStream<Long, Order> orders = builder.stream(Topics.ORDERS.keySerde(), Topics.ORDERS.valueSerde(), Topics.ORDERS.name());
+        KStream<String, Order> orders = builder.stream(Topics.ORDERS.keySerde(), Topics.ORDERS.valueSerde(), Topics.ORDERS.name());
         KTable<ProductType, Integer> warehouseInventory = builder.table(Topics.WAREHOUSE_INVENTORY.keySerde(), Topics.WAREHOUSE_INVENTORY.valueSerde(), Topics.WAREHOUSE_INVENTORY.name());
 
 
@@ -77,16 +77,16 @@ public class InventoryService implements Service {
 
         //Validate the order based on how much stock we have both in the warehouse
         // inventory and the local store of reserved orders
-        KStream<Long, OrderValidation> validatedOrders = ordersWithInventory
+        KStream<String, OrderValidation> validatedOrders = ordersWithInventory
                 .transform(InventoryValidator::new, RESERVED_STOCK_STORE_NAME);
 
         //Push the result into the Order Validations topic
         validatedOrders.to(Topics.ORDER_VALIDATIONS.keySerde(), Topics.ORDER_VALIDATIONS.valueSerde(), Topics.ORDER_VALIDATIONS.name());
 
-        return new KafkaStreams(builder, MicroserviceUtils.streamsConfig(bootstrapServers, stateDir, INVENTORY_SERVICE_APP_ID));
+        return new KafkaStreams(builder, MicroserviceUtils.baseStreamsConfig(bootstrapServers, stateDir, INVENTORY_SERVICE_APP_ID));
     }
 
-    private static class InventoryValidator implements Transformer<ProductType, KeyValue<Order, Integer>, KeyValue<Long, OrderValidation>> {
+    private static class InventoryValidator implements Transformer<ProductType, KeyValue<Order, Integer>, KeyValue<String, OrderValidation>> {
         private KeyValueStore<ProductType, Long> reservedStocksStore;
 
         @Override
@@ -96,7 +96,7 @@ public class InventoryService implements Service {
         }
 
         @Override
-        public KeyValue<Long, OrderValidation> transform(final ProductType productId, final KeyValue<Order, Integer> orderAndStock) {
+        public KeyValue<String, OrderValidation> transform(final ProductType productId, final KeyValue<Order, Integer> orderAndStock) {
             OrderValidation validated;
             Order order = orderAndStock.key;
             Integer warehouseStockCount = orderAndStock.value;
@@ -116,7 +116,7 @@ public class InventoryService implements Service {
         }
 
         @Override
-        public KeyValue<Long, OrderValidation> punctuate(long timestamp) {
+        public KeyValue<String, OrderValidation> punctuate(long timestamp) {
             return null;
         }
 

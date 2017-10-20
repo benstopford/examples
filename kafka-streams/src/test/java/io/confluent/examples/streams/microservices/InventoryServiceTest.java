@@ -16,6 +16,7 @@ import static io.confluent.examples.streams.avro.microservices.OrderType.CREATED
 import static io.confluent.examples.streams.avro.microservices.ProductType.JUMPERS;
 import static io.confluent.examples.streams.avro.microservices.ProductType.UNDERPANTS;
 import static io.confluent.examples.streams.microservices.Schemas.Topics;
+import static io.confluent.examples.streams.microservices.orders.beans.OrderId.id;
 import static java.util.Arrays.asList;
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -48,9 +49,9 @@ public class InventoryServiceTest extends MicroserviceTestUtils {
         sendInventory(inventory, Topics.WAREHOUSE_INVENTORY);
 
         orders = asList(
-                new Order(0L, 1L, CREATED, UNDERPANTS, 3, 10.00d),
-                new Order(1L, 2L, CREATED, JUMPERS, 1, 75.00d),
-                new Order(2L, 2L, CREATED, JUMPERS, 1, 75.00d)
+                new Order(id(0L), 1L, CREATED, UNDERPANTS, 3, 10.00d),
+                new Order(id(1L), 2L, CREATED, JUMPERS, 1, 75.00d),
+                new Order(id(2L), 2L, CREATED, JUMPERS, 1, 75.00d)
         );
         sendOrders(orders);
 
@@ -61,9 +62,9 @@ public class InventoryServiceTest extends MicroserviceTestUtils {
 
         //Then the final order for Jumpers should have been 'rejected' as it's out of stock
         expected = asList(
-                new OrderValidation(0L, OrderValidationType.INVENTORY_CHECK, OrderValidationResult.PASS),
-                new OrderValidation(1L, OrderValidationType.INVENTORY_CHECK, OrderValidationResult.PASS),
-                new OrderValidation(2L, OrderValidationType.INVENTORY_CHECK, OrderValidationResult.FAIL)
+                new OrderValidation(id(0L), OrderValidationType.INVENTORY_CHECK, OrderValidationResult.PASS),
+                new OrderValidation(id(1L), OrderValidationType.INVENTORY_CHECK, OrderValidationResult.PASS),
+                new OrderValidation(id(2L), OrderValidationType.INVENTORY_CHECK, OrderValidationResult.FAIL)
         );
         assertThat(MicroserviceTestUtils.read(Topics.ORDER_VALIDATIONS, expected.size(), CLUSTER.bootstrapServers())).isEqualTo(expected);
 

@@ -1,8 +1,8 @@
 package io.confluent.examples.streams.microservices.orders.rest;
 
-import io.confluent.examples.streams.avro.microservices.Order;
 import io.confluent.examples.streams.interactivequeries.HostStoreInfo;
 import io.confluent.examples.streams.microservices.orders.beans.OrderBean;
+import io.confluent.examples.streams.microservices.orders.beans.OrderId;
 import io.confluent.examples.streams.microservices.orders.command.OrderCommand;
 import io.confluent.examples.streams.microservices.orders.query.OrderQuery;
 import org.apache.kafka.streams.state.HostInfo;
@@ -10,21 +10,29 @@ import org.eclipse.jetty.server.Server;
 import org.eclipse.jetty.servlet.ServletContextHandler;
 import org.eclipse.jetty.servlet.ServletHolder;
 import org.glassfish.jersey.jackson.JacksonFeature;
+import org.glassfish.jersey.server.ManagedAsync;
 import org.glassfish.jersey.server.ResourceConfig;
 import org.glassfish.jersey.servlet.ServletContainer;
 
 import javax.ws.rs.*;
 import javax.ws.rs.client.Client;
 import javax.ws.rs.client.ClientBuilder;
+import javax.ws.rs.container.AsyncResponse;
+import javax.ws.rs.container.Suspended;
 import javax.ws.rs.core.GenericType;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
+import java.net.URI;
+import java.net.URISyntaxException;
+import java.util.concurrent.TimeUnit;
 
-import static java.net.HttpURLConnection.*;
+import static java.net.HttpURLConnection.HTTP_BAD_REQUEST;
+import static org.apache.kafka.streams.state.StreamsMetadata.NOT_AVAILABLE;
 
 
 @Path("orders")
 public class OrdersRestInterface {
+    public static final int LONG_POLL_TIMEOUT = 20000;
     private Server jettyServer;
     private HostInfo hostInfo;
     private OrderCommand command;
@@ -37,35 +45,66 @@ public class OrdersRestInterface {
         this.query = query;
     }
 
-    @GET()
+    @GET
+    @ManagedAsync
     @Path("order/{id}")
-    @Produces(MediaType.APPLICATION_JSON)
-    public OrderBean song(@PathParam("id") final Long id) {
-        HostStoreInfo host = query.getHostForOrderId(id);
+    public void asyncGet(@PathParam("id") final String id, @Suspended final AsyncResponse asyncResponse) {
+        setTimeout(asyncResponse);
 
-        Order order = query.getOrder(id);
-        if (order == null)
-            if (!thisHost(host))
-                order = fetchFromOtherHost(host, "orders/order/" + id);
+        HostStoreInfo hostForKey = getKeyLocation(id, asyncResponse);
 
-        System.out.println("/order/id --> " + order);
-        return order == null ? null : OrderBean.toBean(order);
+        if (hostForKey == null)
+            return;
+        else if (thisHost(hostForKey)) {
+            System.out.println("running GET on this node");
+            query.getOrder(id, asyncResponse);
+        } else {
+            System.out.println("Running get on a different node: " + hostForKey);
+            fetchFromOtherHost(hostForKey, "orders/order/" + id, asyncResponse);
+        }
+    }
+
+    private HostStoreInfo getKeyLocation(@PathParam("id") String id, @Suspended AsyncResponse asyncResponse) {
+        HostStoreInfo locationOfKey;
+        while (unavailable(locationOfKey = query.getHostForOrderId(id))) {
+            if (asyncResponse.isDone())
+                return null;
+            try {
+                Thread.sleep(Math.min(LONG_POLL_TIMEOUT, 500));
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+        }
+        return locationOfKey;
+    }
+
+    private boolean unavailable(HostStoreInfo hostWithKey) {
+        return NOT_AVAILABLE.host().equals(hostWithKey.getHost())
+                && NOT_AVAILABLE.port() == hostWithKey.getPort();
+    }
+
+
+    private void setTimeout(@Suspended AsyncResponse asyncResponse) {
+        asyncResponse.setTimeout(LONG_POLL_TIMEOUT, TimeUnit.MILLISECONDS);
+        asyncResponse.setTimeoutHandler(resp -> resp.resume(
+                Response.status(Response.Status.GATEWAY_TIMEOUT)
+                        .entity("HTTP GET timed out after " + LONG_POLL_TIMEOUT + " ms")
+                        .build()));
     }
 
     private boolean thisHost(final HostStoreInfo host) {
-        System.out.println("is that host " + host + " == " + hostInfo);
         return host.getHost().equals(hostInfo.host()) &&
                 host.getPort() == hostInfo.port();
     }
 
-    private Order fetchFromOtherHost(final HostStoreInfo host, final String path) {
+    private void fetchFromOtherHost(final HostStoreInfo host, final String path, AsyncResponse asyncResponse) {
         try {
-            return client.target(String.format("http://%s:%d/%s", host.getHost(), host.getPort(), path))
+            OrderBean bean = client.target(String.format("http://%s:%d/%s", host.getHost(), host.getPort(), path))
                     .request(MediaType.APPLICATION_JSON_TYPE)
-                    .get(new GenericType<Order>() {
+                    .get(new GenericType<OrderBean>() {
                     });
+            asyncResponse.resume(bean);
         } catch (Exception swallowed) {
-            return null;
         }
     }
 
@@ -73,18 +112,17 @@ public class OrdersRestInterface {
     @Path("/post")
     @Consumes(MediaType.APPLICATION_JSON)
     public Response submitOrder(OrderBean order) {
-        System.out.println("Running post of " + order);
 
-        OrderCommand.OrderCommandResult success = command.putOrderAndWait(OrderBean.fromBean(order));
-        System.out.println("Retuning from post with " + success);
+        OrderCommand.OrderCommandResult success = command.putOrder(OrderBean.fromBean(order));
 
         switch (success) {
             case SUCCESS:
-                return Response.status(HTTP_CREATED).build();
-            case TIMED_OUT:
-                return Response.status(HTTP_GATEWAY_TIMEOUT).build();
-            case FAILED_VALIDATION:
-                return Response.status(HTTP_BAD_REQUEST).build();
+                try {
+                    return Response.created(new URI("/orders/order/" + OrderId.next(order.getId()))).entity(OrderId.next(order.getId()
+                    )).build();
+                } catch (URISyntaxException e) {
+                    e.printStackTrace();
+                }
             default:
                 return Response.status(HTTP_BAD_REQUEST).build();
         }

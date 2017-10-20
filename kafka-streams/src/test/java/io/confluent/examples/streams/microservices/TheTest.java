@@ -7,6 +7,7 @@ import io.confluent.examples.streams.microservices.fraud.FraudService;
 import io.confluent.examples.streams.microservices.inventory.InventoryService;
 import io.confluent.examples.streams.microservices.orders.OrdersService;
 import io.confluent.examples.streams.microservices.orders.beans.OrderBean;
+import io.confluent.examples.streams.microservices.orders.beans.OrderId;
 import io.confluent.examples.streams.microservices.orders.validation.OrderDetailsValidationService;
 import io.confluent.examples.streams.microservices.util.MicroserviceTestUtils;
 import org.apache.kafka.streams.KeyValue;
@@ -21,14 +22,17 @@ import javax.ws.rs.client.Entity;
 import javax.ws.rs.core.GenericType;
 import javax.ws.rs.core.Response;
 import java.net.HttpURLConnection;
+import java.net.URI;
 import java.util.ArrayList;
 import java.util.List;
 
 import static io.confluent.examples.streams.avro.microservices.ProductType.JUMPERS;
 import static io.confluent.examples.streams.avro.microservices.ProductType.UNDERPANTS;
+import static io.confluent.examples.streams.microservices.orders.beans.OrderId.id;
+import static io.confluent.examples.streams.microservices.orders.beans.OrderId.next;
+import static io.confluent.examples.streams.microservices.util.MicroserviceUtils.randomFreeLocalPort;
 import static java.util.Arrays.asList;
 import static javax.ws.rs.core.MediaType.APPLICATION_JSON_TYPE;
-import static org.apache.kafka.test.TestUtils.waitForCondition;
 
 public class TheTest extends MicroserviceTestUtils {
     public final String restAddress = "localhost";
@@ -52,31 +56,28 @@ public class TheTest extends MicroserviceTestUtils {
         sendInventory(inventory, Topics.WAREHOUSE_INVENTORY);
 
         //When post order
-        OrderBean inputOrder = new OrderBean(1L, 2L, OrderType.CREATED, ProductType.JUMPERS, 1, 1d);
+        OrderBean inputOrder = new OrderBean(OrderId.id(1L), 2L, OrderType.CREATED, ProductType.JUMPERS, 1, 1d);
         Response response = client.target(baseUrl + "/post").request(APPLICATION_JSON_TYPE).post(Entity.json(inputOrder));
+
+        URI location = response.getLocation();
 
         //Then check it responds with ok
         AssertionsForClassTypes.assertThat(response.getStatus()).isEqualTo(HttpURLConnection.HTTP_CREATED);
 
-        //Poll until we have an order
-        waitForCondition(() -> {
-            returnedBean = client.target(baseUrl + "/order/" + inputOrder.getId())
-                    .request(APPLICATION_JSON_TYPE)
-                    .get(new GenericType<OrderBean>() {
-                    });
-
-            return returnedBean != null && OrderType.VALIDATED.equals(returnedBean.getState());
-        }, 30 * 1000, "timed out attempting to 'get' validated order order");
+        //Get the order back
+        returnedBean = client.target(location)
+                .request(APPLICATION_JSON_TYPE)
+                .get(new GenericType<OrderBean>() {
+                });
 
         AssertionsForClassTypes.assertThat(returnedBean).isEqualTo(new OrderBean(
-                inputOrder.getId(),
+                OrderId.next(inputOrder.getId()),
                 inputOrder.getCustomerId(),
                 OrderType.VALIDATED,
                 inputOrder.getProduct(),
                 inputOrder.getQuantity(),
                 inputOrder.getPrice()
         ));
-
     }
 
     @Test
@@ -96,34 +97,28 @@ public class TheTest extends MicroserviceTestUtils {
             long start = System.currentTimeMillis();
 
             //When post order
-            OrderBean inputOrder = new OrderBean(i, 2L, OrderType.CREATED, ProductType.JUMPERS, 1, 1d);
-            Response response = client.target(baseUrl + "/post")
-                    .request(APPLICATION_JSON_TYPE)
+            OrderBean inputOrder = new OrderBean(id(i), 2L, OrderType.CREATED, ProductType.JUMPERS, 1, 1d);
+            Response response = client.target(baseUrl + "/post").request(APPLICATION_JSON_TYPE)
                     .post(Entity.json(inputOrder));
+
+            URI location = response.getLocation();
 
             //Then check it responds with ok
             AssertionsForClassTypes.assertThat(response.getStatus()).isEqualTo(HttpURLConnection.HTTP_CREATED);
 
 
             //Poll until we have an order
-            waitForCondition(() -> {
-                OrderBean returnedBean = client.target(baseUrl + "/order/" + inputOrder.getId())
-                        .request(APPLICATION_JSON_TYPE)
-                        .get(new GenericType<OrderBean>() {
-                        });
-
-                return returnedBean != null && OrderType.VALIDATED.equals(returnedBean.getState());
-            }, 30 * 1000, "timed out attempting to 'get' validated order order");
-
-            System.out.println("Took " + (System.currentTimeMillis() - start));
-
-            OrderBean returnedBean = client.target(baseUrl + "/order/" + inputOrder.getId())
+            //Get the order back
+            returnedBean = client.target(location)
                     .request(APPLICATION_JSON_TYPE)
                     .get(new GenericType<OrderBean>() {
                     });
 
+            System.out.println("Took " + (System.currentTimeMillis() - start));
+
+
             AssertionsForClassTypes.assertThat(returnedBean).isEqualTo(new OrderBean(
-                    i,
+                    next(id(i)),
                     inputOrder.getCustomerId(),
                     OrderType.VALIDATED,
                     inputOrder.getProduct(),
@@ -145,33 +140,32 @@ public class TheTest extends MicroserviceTestUtils {
         final String baseUrl = "http://localhost:" + restPort + "/orders";
 
 
+        //Send ten orders one after the other
         for (long i = 0; i < 10; i++) {
             long start = System.currentTimeMillis();
 
             //When post order
-            OrderBean inputOrder = new OrderBean(i, 2L, OrderType.CREATED, ProductType.JUMPERS, 1, 1d);
-            Response response = client.target(baseUrl + "/post")
-                    .request(APPLICATION_JSON_TYPE)
+            OrderBean inputOrder = new OrderBean(id(i), 2L, OrderType.CREATED, ProductType.JUMPERS, 1, 1d);
+            Response response = client.target(baseUrl + "/post").request(APPLICATION_JSON_TYPE)
                     .post(Entity.json(inputOrder));
 
+            URI location = response.getLocation();
+
             //Then check it responds with ok
-            AssertionsForClassTypes.assertThat(response.getStatus()).isEqualTo(HttpURLConnection.HTTP_BAD_REQUEST);
+            AssertionsForClassTypes.assertThat(response.getStatus()).isEqualTo(HttpURLConnection.HTTP_CREATED);
 
 
             //Poll until we have an order
-            waitForCondition(() -> {
-                returnedBean = client.target(baseUrl + "/order/" + inputOrder.getId())
-                        .request(APPLICATION_JSON_TYPE)
-                        .get(new GenericType<OrderBean>() {
-                        });
-
-                return returnedBean != null && OrderType.FAILED.equals(returnedBean.getState());
-            }, 30 * 1000, "timed out attempting to 'get' validated order order");
+            //Get the order back
+            returnedBean = client.target(location)
+                    .request(APPLICATION_JSON_TYPE)
+                    .get(new GenericType<OrderBean>() {
+                    });
 
             System.out.println("Took " + (System.currentTimeMillis() - start));
 
             AssertionsForClassTypes.assertThat(returnedBean).isEqualTo(new OrderBean(
-                    i,
+                    next(id(i)),
                     inputOrder.getCustomerId(),
                     OrderType.FAILED,
                     inputOrder.getProduct(),

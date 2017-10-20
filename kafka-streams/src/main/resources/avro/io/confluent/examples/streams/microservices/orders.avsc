@@ -13,7 +13,7 @@
  "type": "record",
  "name": "Order",
  "fields": [
-     {"name": "id", "type": "long"},
+     {"name": "id", "type": "string"},
      {"name": "customerId", "type": "long"},
      {"name": "state", "type": "OrderType"},
      {"name": "product",  "type": "ProductType"},

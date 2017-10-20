@@ -4,6 +4,7 @@ import io.confluent.examples.streams.avro.microservices.Order;
 import io.confluent.examples.streams.avro.microservices.OrderType;
 import io.confluent.examples.streams.avro.microservices.OrderValidation;
 import io.confluent.examples.streams.microservices.Service;
+import io.confluent.examples.streams.microservices.orders.beans.OrderId;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.kstream.JoinWindows;
@@ -17,9 +18,9 @@ import static io.confluent.examples.streams.avro.microservices.OrderValidationRe
 import static io.confluent.examples.streams.avro.microservices.OrderValidationResult.PASS;
 import static io.confluent.examples.streams.microservices.Schemas.Topics.ORDERS;
 import static io.confluent.examples.streams.microservices.Schemas.Topics.ORDER_VALIDATIONS;
-import static io.confluent.examples.streams.microservices.util.MicroserviceUtils.streamsConfig;
+import static io.confluent.examples.streams.microservices.util.MicroserviceUtils.baseStreamsConfig;
 
-public class OrderValidationSubService implements Service {
+public class OrderValidationRuleAggregatorSubService implements Service {
     public static final String ORDERS_SERVICE_APP_ID = "orders-service";
     private KafkaStreams streams;
 
@@ -35,8 +36,8 @@ public class OrderValidationSubService implements Service {
         final int numberOfRules = 3; //TODO put into a ktable
 
         KStreamBuilder builder = new KStreamBuilder();
-        KStream<Long, OrderValidation> validations = builder.stream(ORDER_VALIDATIONS.keySerde(), ORDER_VALIDATIONS.valueSerde(), ORDER_VALIDATIONS.name());
-        KStream<Long, Order> orders = builder.stream(ORDERS.keySerde(), ORDERS.valueSerde(), ORDERS.name())
+        KStream<String, OrderValidation> validations = builder.stream(ORDER_VALIDATIONS.keySerde(), ORDER_VALIDATIONS.valueSerde(), ORDER_VALIDATIONS.name());
+        KStream<String, Order> orders = builder.stream(ORDERS.keySerde(), ORDERS.valueSerde(), ORDERS.name())
                 .filter((id, order) -> OrderType.CREATED.equals(order.getState()));
 
         //If all rules pass then validate the order
@@ -52,17 +53,25 @@ public class OrderValidationSubService implements Service {
                 //filter where all rules passed
                 .filter((k, total) -> total >= numberOfRules)
                 //Join back to orders and output
-                .join(orders, (id, order) -> newBuilder(order).setState(VALIDATED).build(), JoinWindows.of(3000 * 1000L), ORDERS.keySerde(), Serdes.Long(), ORDERS.valueSerde())
+                .join(orders, (id, order) -> newBuilder(order).setState(VALIDATED)
+                        .setId(OrderId.next(order.getId()))
+                        .build(), JoinWindows.of(3000 * 1000L), ORDERS.keySerde(), Serdes.Long(), ORDERS.valueSerde())
+                .selectKey((k, v) -> v.getId())
                 .to(ORDERS.keySerde(), ORDERS.valueSerde(), ORDERS.name());
 
         //If any rule fails then fail the order
         validations.filter((orderId, rule) -> FAIL.equals(rule.getValidationResult()))
-                .join(orders, (aLong, order) -> newBuilder(order).setState(OrderType.FAILED).build(), JoinWindows.of(3000 * 1000L), ORDERS.keySerde(), ORDER_VALIDATIONS.valueSerde(), ORDERS.valueSerde())
+                .join(orders, (aLong, order) ->
+                                newBuilder(order)
+                                        .setId(OrderId.next(order.getId()))
+                                        .setState(OrderType.FAILED).build(),
+                        JoinWindows.of(3000 * 1000L), ORDERS.keySerde(), ORDER_VALIDATIONS.valueSerde(), ORDERS.valueSerde())
                 .groupByKey(ORDERS.keySerde(), ORDERS.valueSerde())
                 .reduce((order, v1) -> order)
+                .toStream().selectKey((k, v) -> v.getId())
                 .to(ORDERS.keySerde(), ORDERS.valueSerde(), ORDERS.name());
 
-        return new KafkaStreams(builder, streamsConfig(bootstrapServers, stateDir, ORDERS_SERVICE_APP_ID));
+        return new KafkaStreams(builder, baseStreamsConfig(bootstrapServers, stateDir, ORDERS_SERVICE_APP_ID));
     }
 
     @Override

@@ -16,6 +16,7 @@ import static io.confluent.examples.streams.avro.microservices.OrderType.CREATED
 import static io.confluent.examples.streams.avro.microservices.ProductType.JUMPERS;
 import static io.confluent.examples.streams.avro.microservices.ProductType.UNDERPANTS;
 import static io.confluent.examples.streams.microservices.Schemas.Topics;
+import static io.confluent.examples.streams.microservices.orders.beans.OrderId.id;
 import static java.util.Arrays.asList;
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -40,8 +41,8 @@ public class OrderDetailsValidationServiceTest extends MicroserviceTestUtils {
         orderValService = new OrderDetailsValidationService();
 
         orders = asList(
-                new Order(0L, 0L, CREATED, UNDERPANTS, 3, 5.00d), //should pass
-                new Order(1L, 0L, CREATED, JUMPERS, -1, 75.00d) //should fail
+                new Order(id(0L), 0L, CREATED, UNDERPANTS, 3, 5.00d), //should pass
+                new Order(id(1L), 0L, CREATED, JUMPERS, -1, 75.00d) //should fail
         );
         sendOrders(orders);
 
@@ -51,14 +52,14 @@ public class OrderDetailsValidationServiceTest extends MicroserviceTestUtils {
 
         //Then the final order for Jumpers should have been 'rejected' as it's out of stock
         expected = asList(
-                new OrderValidation(0L, OrderValidationType.ORDER_DETAILS_CHECK, OrderValidationResult.PASS),
-                new OrderValidation(1L, OrderValidationType.ORDER_DETAILS_CHECK, OrderValidationResult.FAIL)
+                new OrderValidation(id(0L), OrderValidationType.ORDER_DETAILS_CHECK, OrderValidationResult.PASS),
+                new OrderValidation(id(1L), OrderValidationType.ORDER_DETAILS_CHECK, OrderValidationResult.FAIL)
         );
         assertThat(MicroserviceTestUtils.read(Topics.ORDER_VALIDATIONS, 2, CLUSTER.bootstrapServers())).isEqualTo(expected);
     }
 
     @After
-    public void tearDown(){
+    public void tearDown() {
         orderValService.stop();
     }
 }

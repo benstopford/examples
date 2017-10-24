@@ -64,12 +64,14 @@ public class OrdersRestInterface {
         }
     }
 
-    private HostStoreInfo getKeyLocation(@PathParam("id") String id, @Suspended AsyncResponse asyncResponse) {
+    private HostStoreInfo getKeyLocation(String id, AsyncResponse asyncResponse) {
         HostStoreInfo locationOfKey;
-        while (unavailable(locationOfKey = query.getHostForOrderId(id))) {
+        while (isUnavailable(locationOfKey = query.getHostForOrderId(id))) {
+            //The state store is not available. This can happen on startup.
             if (asyncResponse.isDone())
                 return null;
             try {
+                //If there is an outstanding request sleep a bit until the state store is available.
                 Thread.sleep(Math.min(LONG_POLL_TIMEOUT, 500));
             } catch (InterruptedException e) {
                 e.printStackTrace();
@@ -78,7 +80,7 @@ public class OrdersRestInterface {
         return locationOfKey;
     }
 
-    private boolean unavailable(HostStoreInfo hostWithKey) {
+    private boolean isUnavailable(HostStoreInfo hostWithKey) {
         return NOT_AVAILABLE.host().equals(hostWithKey.getHost())
                 && NOT_AVAILABLE.port() == hostWithKey.getPort();
     }

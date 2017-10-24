@@ -25,6 +25,11 @@ import java.net.HttpURLConnection;
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
+import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 
 import static io.confluent.examples.streams.avro.microservices.ProductType.JUMPERS;
 import static io.confluent.examples.streams.avro.microservices.ProductType.UNDERPANTS;
@@ -40,7 +45,6 @@ public class TheTest extends MicroserviceTestUtils {
     private static int restPort;
     private OrderBean returnedBean;
 
-    //TODO really all our order messages should have a incrementing version id
     //TODO test latency of processing for records when in a batch of say 200 and end to end latency may stretch.
 
     @Test
@@ -175,6 +179,87 @@ public class TheTest extends MicroserviceTestUtils {
         }
     }
 
+    private volatile boolean loadTestRunning = true;
+    private volatile int idCounter = 0;
+
+    @Test
+    public void shouldHandleConcurrentRequests() throws Exception {
+        final Client client = ClientBuilder.newClient();
+        final String baseUrl = "http://localhost:" + restPort + "/orders";
+
+        //Add inventory required by the inventory service
+        List<KeyValue<ProductType, Integer>> inventory = asList(
+                new KeyValue<>(UNDERPANTS, 75000000),
+                new KeyValue<>(JUMPERS, 10000000)
+        );
+        sendInventory(inventory, Topics.WAREHOUSE_INVENTORY);
+
+        ConcurrentLinkedQueue<Long> queue = new ConcurrentLinkedQueue<>();
+
+        int threadCount = 10;
+        ExecutorService executors = Executors.newFixedThreadPool(threadCount);
+
+        //Warm up
+        putAndGet(idCounter++, client, baseUrl);
+        System.out.println("Starting");
+
+        //Send ten orders one after the other
+        for (long j = 0; j < threadCount; j++) {
+            executors.execute(() -> {
+
+                while (loadTestRunning) {
+                    long start = System.currentTimeMillis();
+
+                    int i = idCounter++;
+                    OrderBean order = putAndGet(i, client, baseUrl);
+
+                    long took = System.currentTimeMillis() - start;
+                    queue.add(took);
+                    System.out.println(i + " Took " + took);
+
+                    AssertionsForClassTypes.assertThat(returnedBean).isEqualTo(new OrderBean(
+                            next(id(i)),
+                            order.getCustomerId(),
+                            OrderType.VALIDATED,
+                            order.getProduct(),
+                            order.getQuantity(),
+                            order.getPrice()
+                    ));
+                }
+            });
+        }
+
+        //Run for some fixed time
+        Thread.sleep(30 * 1000);
+        System.out.println("time is up");
+        loadTestRunning = false;
+        executors.awaitTermination(5, TimeUnit.SECONDS);
+
+        System.out.println("Number of gets processed in 30 secs " + queue.size());
+        System.out.println("Finished with queue values " + queue);
+
+        Optional<Long> total = queue.stream().reduce((a, b) -> a + b);
+        System.out.println("Average duration of a get was " + total.get() / queue.size());
+
+    }
+
+    private OrderBean putAndGet(int i, Client client, String baseUrl) {
+        //When post order
+        OrderBean inputOrder = new OrderBean(id(i), 2L, OrderType.CREATED, ProductType.JUMPERS, 1, 1d);
+        Response response = client.target(baseUrl + "/post").request(APPLICATION_JSON_TYPE)
+                .post(Entity.json(inputOrder));
+
+        URI location = response.getLocation();
+
+        //Get the order back
+        returnedBean = client.target(location)
+                .request(APPLICATION_JSON_TYPE)
+                .get(new GenericType<OrderBean>() {
+                });
+        return inputOrder;
+    }
+
+
     @Before
     public void startEverythingElse() throws Exception {
         if (!CLUSTER.isRunning())
@@ -189,7 +274,7 @@ public class TheTest extends MicroserviceTestUtils {
         services.add(new OrderDetailsValidationService());
         services.add(new OrdersService(restAddress, restPort));
 
-        tailAllTopicsToConsole(CLUSTER.bootstrapServers());
+//        tailAllTopicsToConsole(CLUSTER.bootstrapServers());
         services.forEach(s -> s.start(CLUSTER.bootstrapServers()));
     }
 

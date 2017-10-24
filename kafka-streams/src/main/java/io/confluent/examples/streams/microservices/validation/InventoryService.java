@@ -1,4 +1,4 @@
-package io.confluent.examples.streams.microservices.inventory;
+package io.confluent.examples.streams.microservices.validation;
 
 import io.confluent.examples.streams.avro.microservices.Order;
 import io.confluent.examples.streams.avro.microservices.OrderType;

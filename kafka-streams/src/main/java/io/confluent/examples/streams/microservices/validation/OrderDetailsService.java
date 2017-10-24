@@ -1,4 +1,4 @@
-package io.confluent.examples.streams.microservices.orders.validation;
+package io.confluent.examples.streams.microservices.validation;
 
 import io.confluent.examples.streams.avro.microservices.Order;
 import io.confluent.examples.streams.avro.microservices.OrderType;
@@ -25,7 +25,7 @@ import static io.confluent.examples.streams.avro.microservices.OrderValidationTy
 import static io.confluent.examples.streams.microservices.Schemas.Topics;
 import static java.util.Collections.singletonList;
 
-public class OrderDetailsValidationService implements Service {
+public class OrderDetailsService implements Service {
     public static final String CONSUMER_GROUP_ID = "OrderValidationService";
     private KafkaConsumer<String, Order> consumer;
     private KafkaProducer<String, OrderValidation> producer;
@@ -131,7 +131,7 @@ public class OrderDetailsValidationService implements Service {
     }
 
     public static void main(String[] args) throws Exception {
-        OrderDetailsValidationService service = new OrderDetailsValidationService();
+        OrderDetailsService service = new OrderDetailsService();
         service.startService(MicroserviceUtils.initSchemaRegistryAndGetBootstrapServers(args));
 
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {

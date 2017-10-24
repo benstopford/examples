@@ -3,14 +3,15 @@ package io.confluent.examples.streams.microservices;
 import io.confluent.examples.streams.avro.microservices.OrderType;
 import io.confluent.examples.streams.avro.microservices.ProductType;
 import io.confluent.examples.streams.microservices.Schemas.Topics;
-import io.confluent.examples.streams.microservices.fraud.FraudService;
-import io.confluent.examples.streams.microservices.inventory.InventoryService;
-import io.confluent.examples.streams.microservices.orders.OrdersService;
-import io.confluent.examples.streams.microservices.orders.beans.OrderBean;
-import io.confluent.examples.streams.microservices.orders.beans.OrderId;
-import io.confluent.examples.streams.microservices.orders.validation.OrderDetailsValidationService;
 import io.confluent.examples.streams.microservices.util.MicroserviceTestUtils;
+import io.confluent.examples.streams.microservices.util.beans.OrderBean;
+import io.confluent.examples.streams.microservices.util.beans.OrderId;
+import io.confluent.examples.streams.microservices.validation.FraudService;
+import io.confluent.examples.streams.microservices.validation.InventoryService;
+import io.confluent.examples.streams.microservices.validation.OrderDetailsService;
+import io.confluent.examples.streams.microservices.validation.RuleAggregatorService;
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.state.HostInfo;
 import org.assertj.core.api.AssertionsForClassTypes;
 import org.junit.After;
 import org.junit.Before;
@@ -33,13 +34,13 @@ import java.util.concurrent.TimeUnit;
 
 import static io.confluent.examples.streams.avro.microservices.ProductType.JUMPERS;
 import static io.confluent.examples.streams.avro.microservices.ProductType.UNDERPANTS;
-import static io.confluent.examples.streams.microservices.orders.beans.OrderId.id;
-import static io.confluent.examples.streams.microservices.orders.beans.OrderId.next;
 import static io.confluent.examples.streams.microservices.util.MicroserviceUtils.randomFreeLocalPort;
+import static io.confluent.examples.streams.microservices.util.beans.OrderId.id;
+import static io.confluent.examples.streams.microservices.util.beans.OrderId.next;
 import static java.util.Arrays.asList;
 import static javax.ws.rs.core.MediaType.APPLICATION_JSON_TYPE;
 
-public class TheTest extends MicroserviceTestUtils {
+public class AcceptanceTest extends MicroserviceTestUtils {
     public final String restAddress = "localhost";
     private List<Service> services = new ArrayList<>();
     private static int restPort;
@@ -271,8 +272,9 @@ public class TheTest extends MicroserviceTestUtils {
 
         services.add(new FraudService());
         services.add(new InventoryService());
-        services.add(new OrderDetailsValidationService());
-        services.add(new OrdersService(restAddress, restPort));
+        services.add(new OrderDetailsService());
+        services.add(new RuleAggregatorService());
+        services.add(new OrdersService(new HostInfo(restAddress, restPort)));
 
 //        tailAllTopicsToConsole(CLUSTER.bootstrapServers());
         services.forEach(s -> s.start(CLUSTER.bootstrapServers()));

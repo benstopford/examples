@@ -1,4 +1,4 @@
-package io.confluent.examples.streams.microservices.orders.beans;
+package io.confluent.examples.streams.microservices.util.beans;
 
 public class OrderId {
     public static String id(long id, int version) {

@@ -5,8 +5,8 @@ import io.confluent.examples.streams.avro.microservices.OrderValidation;
 import io.confluent.examples.streams.avro.microservices.OrderValidationResult;
 import io.confluent.examples.streams.avro.microservices.OrderValidationType;
 import io.confluent.examples.streams.microservices.Schemas.Topics;
-import io.confluent.examples.streams.microservices.orders.validation.OrderValidationRuleAggregatorSubService;
 import io.confluent.examples.streams.microservices.util.MicroserviceTestUtils;
+import io.confluent.examples.streams.microservices.validation.RuleAggregatorService;
 import org.apache.kafka.streams.KeyValue;
 import org.junit.After;
 import org.junit.BeforeClass;
@@ -18,14 +18,14 @@ import java.util.stream.Collectors;
 import static io.confluent.examples.streams.avro.microservices.OrderType.*;
 import static io.confluent.examples.streams.avro.microservices.ProductType.JUMPERS;
 import static io.confluent.examples.streams.avro.microservices.ProductType.UNDERPANTS;
-import static io.confluent.examples.streams.microservices.orders.beans.OrderId.id;
+import static io.confluent.examples.streams.microservices.util.beans.OrderId.id;
 import static java.util.Arrays.asList;
 import static org.assertj.core.api.Assertions.assertThat;
 
 public class OrderValidationRuleAggregatorSubServiceTest extends MicroserviceTestUtils {
     private List<Order> orders;
     private List<OrderValidation> ruleResults;
-    private OrderValidationRuleAggregatorSubService ordersService;
+    private RuleAggregatorService ordersService;
 
 
     @BeforeClass
@@ -39,7 +39,7 @@ public class OrderValidationRuleAggregatorSubServiceTest extends MicroserviceTes
     public void shouldAggregateRuleSuccesses() throws Exception {
 
         //Given
-        ordersService = new OrderValidationRuleAggregatorSubService();
+        ordersService = new RuleAggregatorService();
 
         orders = asList(
                 new Order(id(0L), 0L, CREATED, UNDERPANTS, 3, 5.00d),

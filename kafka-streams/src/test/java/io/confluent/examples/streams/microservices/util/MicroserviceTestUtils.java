@@ -87,7 +87,6 @@ public class MicroserviceTestUtils {
         List<KeyValue<K, V>> actualValues = new ArrayList<>();
         org.apache.kafka.test.TestUtils.waitForCondition(() -> {
             ConsumerRecords<K, V> records = consumer.poll(100);
-            System.out.println("Found something " + records.count());
             for (ConsumerRecord<K, V> record : records) {
                 actualValues.add(KeyValue.pair(record.key(), record.value()));
             }

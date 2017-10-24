@@ -1,10 +1,10 @@
-package io.confluent.examples.streams.microservices;
+package io.confluent.examples.streams.microservices.validation;
 
 import io.confluent.examples.streams.avro.microservices.Order;
 import io.confluent.examples.streams.avro.microservices.OrderValidation;
 import io.confluent.examples.streams.avro.microservices.OrderValidationResult;
 import io.confluent.examples.streams.avro.microservices.OrderValidationType;
-import io.confluent.examples.streams.microservices.orders.validation.OrderDetailsValidationService;
+import io.confluent.examples.streams.microservices.Schemas;
 import io.confluent.examples.streams.microservices.util.MicroserviceTestUtils;
 import org.junit.After;
 import org.junit.BeforeClass;
@@ -16,15 +16,15 @@ import static io.confluent.examples.streams.avro.microservices.OrderType.CREATED
 import static io.confluent.examples.streams.avro.microservices.ProductType.JUMPERS;
 import static io.confluent.examples.streams.avro.microservices.ProductType.UNDERPANTS;
 import static io.confluent.examples.streams.microservices.Schemas.Topics;
-import static io.confluent.examples.streams.microservices.orders.beans.OrderId.id;
+import static io.confluent.examples.streams.microservices.util.beans.OrderId.id;
 import static java.util.Arrays.asList;
 import static org.assertj.core.api.Assertions.assertThat;
 
-public class OrderDetailsValidationServiceTest extends MicroserviceTestUtils {
+public class OrderDetailsServiceTest extends MicroserviceTestUtils {
 
     private List<Order> orders;
     private List<OrderValidation> expected;
-    private OrderDetailsValidationService orderValService;
+    private OrderDetailsService orderValService;
 
 
     @BeforeClass
@@ -38,7 +38,7 @@ public class OrderDetailsValidationServiceTest extends MicroserviceTestUtils {
     public void shouldPassValidOrder() throws Exception {
 
         //Given
-        orderValService = new OrderDetailsValidationService();
+        orderValService = new OrderDetailsService();
 
         orders = asList(
                 new Order(id(0L), 0L, CREATED, UNDERPANTS, 3, 5.00d), //should pass

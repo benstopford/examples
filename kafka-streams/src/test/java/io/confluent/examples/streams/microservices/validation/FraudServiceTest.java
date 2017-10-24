@@ -1,8 +1,8 @@
-package io.confluent.examples.streams.microservices;
+package io.confluent.examples.streams.microservices.validation;
 
 import io.confluent.examples.streams.avro.microservices.Order;
 import io.confluent.examples.streams.avro.microservices.OrderValidation;
-import io.confluent.examples.streams.microservices.fraud.FraudService;
+import io.confluent.examples.streams.microservices.Schemas;
 import io.confluent.examples.streams.microservices.util.MicroserviceTestUtils;
 import org.junit.After;
 import org.junit.BeforeClass;
@@ -17,7 +17,7 @@ import static io.confluent.examples.streams.avro.microservices.OrderValidationTy
 import static io.confluent.examples.streams.avro.microservices.ProductType.JUMPERS;
 import static io.confluent.examples.streams.avro.microservices.ProductType.UNDERPANTS;
 import static io.confluent.examples.streams.microservices.Schemas.Topics;
-import static io.confluent.examples.streams.microservices.orders.beans.OrderId.id;
+import static io.confluent.examples.streams.microservices.util.beans.OrderId.id;
 import static java.util.Arrays.asList;
 import static org.assertj.core.api.Assertions.assertThat;
 

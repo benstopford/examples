@@ -5,7 +5,6 @@ import io.confluent.examples.streams.avro.microservices.OrderType;
 import io.confluent.examples.streams.avro.microservices.ProductType;
 import io.confluent.examples.streams.microservices.util.MicroserviceTestUtils;
 import io.confluent.examples.streams.microservices.util.beans.OrderBean;
-import io.confluent.examples.streams.microservices.util.beans.OrderId;
 import org.apache.kafka.streams.state.HostInfo;
 import org.junit.After;
 import org.junit.Before;
@@ -19,9 +18,13 @@ import javax.ws.rs.client.Entity;
 import javax.ws.rs.core.GenericType;
 import javax.ws.rs.core.Response;
 import java.net.HttpURLConnection;
-import java.util.Arrays;
+import java.net.URI;
 
+import static io.confluent.examples.streams.avro.microservices.Order.newBuilder;
 import static io.confluent.examples.streams.microservices.util.MicroserviceUtils.randomFreeLocalPort;
+import static io.confluent.examples.streams.microservices.util.beans.OrderId.id;
+import static io.confluent.examples.streams.microservices.util.beans.OrderId.next;
+import static java.util.Arrays.asList;
 import static javax.ws.rs.core.MediaType.APPLICATION_JSON_TYPE;
 import static org.assertj.core.api.AssertionsForInterfaceTypes.assertThat;
 import static org.junit.Assert.fail;
@@ -29,7 +32,7 @@ import static org.junit.Assert.fail;
 public class OrdersServiceTest extends MicroserviceTestUtils {
 
     private int port;
-    private OrdersService rest1;
+    private OrdersService rest;
     private OrdersService rest2;
 
     @BeforeClass
@@ -46,73 +49,83 @@ public class OrdersServiceTest extends MicroserviceTestUtils {
 
     @After
     public void shutdown() throws Exception {
-        if (rest1 != null)
-            rest1.stop();
+        if (rest != null)
+            rest.stop();
         if (rest2 != null)
             rest2.stop();
     }
 
     @Test
     public void shouldPostOrderAndGetItBack() throws Exception {
-        OrderBean createdBean = new OrderBean(OrderId.id(1L), 2L, OrderType.CREATED, ProductType.JUMPERS, 10, 100d);
+        OrderBean bean = new OrderBean(id(1L), 2L, OrderType.CREATED, ProductType.JUMPERS, 10, 100d);
 
         final Client client = ClientBuilder.newClient();
         final String baseUrl = "http://localhost:" + port + "/orders";
 
-        //Stub the underlying orders service
-        rest1 = new OrdersService(
+        //Given a rest service
+        rest = new OrdersService(
                 new HostInfo("localhost", port)
         );
-        rest1.start(CLUSTER.bootstrapServers());
+        rest.start(CLUSTER.bootstrapServers());
 
-        //When post order
+        //When we POST an order
         Response response = client.target(baseUrl + "/post")
                 .request(APPLICATION_JSON_TYPE)
-                .post(Entity.json(createdBean));
+                .post(Entity.json(bean));
 
         //Then
         assertThat(response.getStatus()).isEqualTo(HttpURLConnection.HTTP_CREATED);
 
-        //When GET
-        OrderBean returnedBean = client.target(baseUrl + "/order/" + createdBean.getId())
+        //When GET the bean back
+        OrderBean returnedBean = client.target(baseUrl + "/order/" + bean.getId())
                 .request(APPLICATION_JSON_TYPE)
                 .get(new GenericType<OrderBean>() {
                 });
-        //Then
-        assertThat(returnedBean).isEqualTo(createdBean);
+
+        //Then it should be the bean we PUT
+        assertThat(returnedBean).isEqualTo(bean);
     }
 
 
     @Test
-    public void shouldLinkToNextVersionOfRecordInResponse() throws Exception {
-        OrderBean beanV1 = new OrderBean(OrderId.id(1L, 0), 2L, OrderType.CREATED, ProductType.JUMPERS, 10, 100d);
-        Order orderV2 = new Order(OrderId.id(1L, 1), 2L, OrderType.VALIDATED, ProductType.JUMPERS, 10, 100d);
-        OrderBean beanV2 = OrderBean.toBean(orderV2);
+    public void shouldPostLinkToNextVersionOfRecordInResponse() throws Exception {
+        Order orderV1 = new Order(id(1L, 0), 2L, OrderType.CREATED, ProductType.JUMPERS, 10, 100d);
+        OrderBean beanV1 = OrderBean.toBean(orderV1);
 
         final Client client = ClientBuilder.newClient();
         final String baseUrl = "http://localhost:" + port + "/orders";
 
-        //Stub the underlying orders service
-        rest1 = new OrdersService(
+        //Given a rest service
+        rest = new OrdersService(
                 new HostInfo("localhost", port)
         );
-        rest1.start(CLUSTER.bootstrapServers());
+        rest.start(CLUSTER.bootstrapServers());
 
-        //When post order
+        //When we post an order
         Response response = client.target(baseUrl + "/post")
                 .request(APPLICATION_JSON_TYPE)
                 .post(Entity.json(beanV1));
 
         //Simulate the order being validated
-        MicroserviceTestUtils.sendOrders(Arrays.asList(orderV2));
+        MicroserviceTestUtils.sendOrders(asList(
+                newBuilder(orderV1)
+                        .setId(next(orderV1.getId()))
+                        .setState(OrderType.VALIDATED)
+                        .build()));
 
-        //Then the URI returned by the orginal post should point to the validated order
-        OrderBean returnedBean = client.target(response.getLocation())
+        //The URI returned by the POST should point to the 'post validation' order
+        URI location = response.getLocation();
+
+        //When we GAT the order from the returned location
+        OrderBean returnedBean = client.target(location)
                 .request(APPLICATION_JSON_TYPE)
                 .get(new GenericType<OrderBean>() {
                 });
-        //Then
-        assertThat(returnedBean).isEqualTo(beanV2);
+
+        //Then Version should have been incremented
+        assertThat(returnedBean.getId()).isEqualTo(id(1L, 1));
+        //Then status should be Validated
+        assertThat(returnedBean.getState()).isEqualTo(OrderType.VALIDATED);
     }
 
     @Test
@@ -122,14 +135,14 @@ public class OrdersServiceTest extends MicroserviceTestUtils {
 
 
         //Start the rest interface
-        rest1 = new OrdersService(
+        rest = new OrdersService(
                 new HostInfo("localhost", port)
         );
-        rest1.start(CLUSTER.bootstrapServers());
+        rest.start(CLUSTER.bootstrapServers());
 
-        //When GET order should timeout
+        //Then GET order should timeout
         try {
-            client.target(baseUrl + "/order/" + OrderId.id(1))
+            client.target(baseUrl + "/order/" + id(1))
                     .queryParam("timeout", 100) //Lower the request timeout
                     .request(APPLICATION_JSON_TYPE)
                     .get(new GenericType<OrderBean>() {
@@ -142,15 +155,15 @@ public class OrdersServiceTest extends MicroserviceTestUtils {
 
     @Test
     public void shouldGetOrderByIdWhenOnDifferentHost() throws Exception {
-        OrderBean order = new OrderBean(OrderId.id(1L), 2L, OrderType.VALIDATED, ProductType.JUMPERS, 10, 100d);
+        OrderBean order = new OrderBean(id(1L), 2L, OrderType.VALIDATED, ProductType.JUMPERS, 10, 100d);
         int port1 = randomFreeLocalPort();
         int port2 = randomFreeLocalPort();
         final Client client = ClientBuilder.newClient();
 
         //Given two rest servers on different ports
-        rest1 = new OrdersService(new HostInfo("localhost", port1));
+        rest = new OrdersService(new HostInfo("localhost", port1));
         rest2 = new OrdersService(new HostInfo("localhost", port2));
-        rest1.start(CLUSTER.bootstrapServers());
+        rest.start(CLUSTER.bootstrapServers());
         rest2.start(CLUSTER.bootstrapServers());
 
         //And one order
@@ -159,35 +172,21 @@ public class OrdersServiceTest extends MicroserviceTestUtils {
                 .post(Entity.json(order));
 
         //When GET to rest1
-        OrderBean returnedBean = client.target("http://localhost:" + port1 + "/orders/order/" + order.getId())
+        OrderBean returnedOrder = client.target("http://localhost:" + port1 + "/orders/order/" + order.getId())
                 .request(APPLICATION_JSON_TYPE)
                 .get(new GenericType<OrderBean>() {
                 });
 
         //Then we should get the order back
-        assertThat(returnedBean).isEqualTo(new OrderBean(
-                order.getId(),
-                order.getCustomerId(),
-                order.getState(),
-                order.getProduct(),
-                order.getQuantity(),
-                order.getPrice()
-        ));
+        assertThat(returnedOrder).isEqualTo(order);
 
         //When GET to rest2
-        returnedBean = client.target("http://localhost:" + port2 + "/orders/order/" + order.getId())
+        returnedOrder = client.target("http://localhost:" + port2 + "/orders/order/" + order.getId())
                 .request(APPLICATION_JSON_TYPE)
                 .get(new GenericType<OrderBean>() {
                 });
 
         //Then we should get the order back also
-        assertThat(returnedBean).isEqualTo(new OrderBean(
-                order.getId(),
-                order.getCustomerId(),
-                order.getState(),
-                order.getProduct(),
-                order.getQuantity(),
-                order.getPrice()
-        ));
+        assertThat(returnedOrder).isEqualTo(order);
     }
 }

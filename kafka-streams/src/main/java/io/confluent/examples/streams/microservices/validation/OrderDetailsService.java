@@ -32,8 +32,8 @@ import static java.util.Collections.singletonList;
  * - etc...
  * <p>
  * This service could be built with Kafka Streams but we've used a Producer/Consumer pair
- * including the integration with Kafka's Exactly Once feature to demonstrate this other
- * style of building event driven services.
+ * including the integration with Kafka's Exactly Once feature (Transactions) to demonstrate
+ * this other style of building event driven services.
  */
 public class OrderDetailsService implements Service {
     private static final String CONSUMER_GROUP_ID = "OrderValidationService";

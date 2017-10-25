@@ -12,7 +12,6 @@ import io.confluent.examples.streams.microservices.validation.OrderDetailsServic
 import io.confluent.examples.streams.microservices.validation.RuleAggregatorService;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.state.HostInfo;
-import org.assertj.core.api.AssertionsForClassTypes;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -39,6 +38,7 @@ import static io.confluent.examples.streams.microservices.util.beans.OrderId.id;
 import static io.confluent.examples.streams.microservices.util.beans.OrderId.next;
 import static java.util.Arrays.asList;
 import static javax.ws.rs.core.MediaType.APPLICATION_JSON_TYPE;
+import static org.assertj.core.api.AssertionsForClassTypes.assertThat;
 
 public class AcceptanceTest extends MicroserviceTestUtils {
     private volatile boolean loadTestRunning = true;
@@ -49,25 +49,26 @@ public class AcceptanceTest extends MicroserviceTestUtils {
     private OrderBean returnedBean;
 
     @Test
-    public void shouldPutNewOrderThenGetValidated() throws Exception {
+    public void shouldCreateNewOrderAndGetBackValidatedOrder() throws Exception {
         final Client client = ClientBuilder.newClient();
         final String baseUrl = "http://localhost:" + restPort + "/orders";
 
-        //Add inventory required by the inventory service
+        //Add inventory required by the inventory service with enough items in stock to pass validation
         List<KeyValue<ProductType, Integer>> inventory = asList(
                 new KeyValue<>(UNDERPANTS, 75),
                 new KeyValue<>(JUMPERS, 10)
         );
         sendInventory(inventory, Topics.WAREHOUSE_INVENTORY);
 
-        //When post order
+        //When we POST order
         OrderBean inputOrder = new OrderBean(OrderId.id(1L), 2L, OrderType.CREATED, ProductType.JUMPERS, 1, 1d);
         Response response = client.target(baseUrl + "/post").request(APPLICATION_JSON_TYPE).post(Entity.json(inputOrder));
 
+        //The location passed back in the PUT is the location of the "post-validation" order.
         URI location = response.getLocation();
 
         //Then check it responds with ok
-        AssertionsForClassTypes.assertThat(response.getStatus()).isEqualTo(HttpURLConnection.HTTP_CREATED);
+        assertThat(response.getStatus()).isEqualTo(HttpURLConnection.HTTP_CREATED);
 
         //Get the order back
         returnedBean = client.target(location)
@@ -75,14 +76,8 @@ public class AcceptanceTest extends MicroserviceTestUtils {
                 .get(new GenericType<OrderBean>() {
                 });
 
-        AssertionsForClassTypes.assertThat(returnedBean).isEqualTo(new OrderBean(
-                OrderId.next(inputOrder.getId()),
-                inputOrder.getCustomerId(),
-                OrderType.VALIDATED,
-                inputOrder.getProduct(),
-                inputOrder.getQuantity(),
-                inputOrder.getPrice()
-        ));
+        assertThat(returnedBean.getId()).isEqualTo(OrderId.next(inputOrder.getId()));
+        assertThat(returnedBean.getState()).isEqualTo(OrderType.VALIDATED);
     }
 
     @Test
@@ -97,7 +92,7 @@ public class AcceptanceTest extends MicroserviceTestUtils {
         );
         sendInventory(inventory, Topics.WAREHOUSE_INVENTORY);
 
-        //Send ten orders one after the other
+        //Send ten orders in succession
         for (long i = 0; i < 10; i++) {
             long start = System.currentTimeMillis();
 
@@ -109,10 +104,8 @@ public class AcceptanceTest extends MicroserviceTestUtils {
             URI location = response.getLocation();
 
             //Then check it responds with ok
-            AssertionsForClassTypes.assertThat(response.getStatus()).isEqualTo(HttpURLConnection.HTTP_CREATED);
+            assertThat(response.getStatus()).isEqualTo(HttpURLConnection.HTTP_CREATED);
 
-
-            //Poll until we have an order
             //Get the order back
             returnedBean = client.target(location)
                     .request(APPLICATION_JSON_TYPE)
@@ -121,8 +114,7 @@ public class AcceptanceTest extends MicroserviceTestUtils {
 
             System.out.println("Took " + (System.currentTimeMillis() - start));
 
-
-            AssertionsForClassTypes.assertThat(returnedBean).isEqualTo(new OrderBean(
+            assertThat(returnedBean).isEqualTo(new OrderBean(
                     next(id(i)),
                     inputOrder.getCustomerId(),
                     OrderType.VALIDATED,
@@ -157,10 +149,8 @@ public class AcceptanceTest extends MicroserviceTestUtils {
             URI location = response.getLocation();
 
             //Then check it responds with ok
-            AssertionsForClassTypes.assertThat(response.getStatus()).isEqualTo(HttpURLConnection.HTTP_CREATED);
+            assertThat(response.getStatus()).isEqualTo(HttpURLConnection.HTTP_CREATED);
 
-
-            //Poll until we have an order
             //Get the order back
             returnedBean = client.target(location)
                     .request(APPLICATION_JSON_TYPE)
@@ -169,7 +159,7 @@ public class AcceptanceTest extends MicroserviceTestUtils {
 
             System.out.println("Took " + (System.currentTimeMillis() - start));
 
-            AssertionsForClassTypes.assertThat(returnedBean).isEqualTo(new OrderBean(
+            assertThat(returnedBean).isEqualTo(new OrderBean(
                     next(id(i)),
                     inputOrder.getCustomerId(),
                     OrderType.FAILED,
@@ -215,7 +205,7 @@ public class AcceptanceTest extends MicroserviceTestUtils {
                     queue.add(took);
                     System.out.println(i + " Took " + took);
 
-                    AssertionsForClassTypes.assertThat(returnedBean).isEqualTo(new OrderBean(
+                    assertThat(returnedBean).isEqualTo(new OrderBean(
                             next(id(i)),
                             order.getCustomerId(),
                             OrderType.VALIDATED,
@@ -228,35 +218,27 @@ public class AcceptanceTest extends MicroserviceTestUtils {
         }
 
         //Run for some fixed time
-        Thread.sleep(30 * 1000);
-        System.out.println("time is up");
+        Thread.sleep(20 * 1000);
         loadTestRunning = false;
         executors.awaitTermination(5, TimeUnit.SECONDS);
 
-        System.out.println("Number of gets processed in 30 secs " + queue.size());
-        System.out.println("Finished with queue values " + queue);
-
+        System.out.println("Number of gets processed in 20 secs " + queue.size());
         Optional<Long> total = queue.stream().reduce((a, b) -> a + b);
         System.out.println("Average duration of a get was " + total.get() / queue.size());
-
     }
 
     private OrderBean putAndGet(int i, Client client, String baseUrl) {
-        //When post order
-        OrderBean inputOrder = new OrderBean(id(i), 2L, OrderType.CREATED, ProductType.JUMPERS, 1, 1d);
+        OrderBean order = new OrderBean(id(i), 2L, OrderType.CREATED, ProductType.JUMPERS, 1, 1d);
+
         Response response = client.target(baseUrl + "/post").request(APPLICATION_JSON_TYPE)
-                .post(Entity.json(inputOrder));
+                .post(Entity.json(order));
 
-        URI location = response.getLocation();
-
-        //Get the order back
-        returnedBean = client.target(location)
+        returnedBean = client.target(response.getLocation())
                 .request(APPLICATION_JSON_TYPE)
                 .get(new GenericType<OrderBean>() {
                 });
-        return inputOrder;
+        return order;
     }
-
 
     @Before
     public void startEverythingElse() throws Exception {
@@ -273,7 +255,7 @@ public class AcceptanceTest extends MicroserviceTestUtils {
         services.add(new RuleAggregatorService());
         services.add(new OrdersService(new HostInfo(restAddress, restPort)));
 
-//        tailAllTopicsToConsole(CLUSTER.bootstrapServers());
+        tailAllTopicsToConsole(CLUSTER.bootstrapServers());
         services.forEach(s -> s.start(CLUSTER.bootstrapServers()));
     }
 

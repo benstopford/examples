@@ -4,6 +4,9 @@ import io.confluent.examples.streams.avro.microservices.Order;
 import io.confluent.examples.streams.avro.microservices.OrderType;
 import io.confluent.examples.streams.avro.microservices.ProductType;
 
+/**
+ * Simple DTO used by the REST interface
+ */
 public class OrderBean {
     private String id;
     private long customerId;

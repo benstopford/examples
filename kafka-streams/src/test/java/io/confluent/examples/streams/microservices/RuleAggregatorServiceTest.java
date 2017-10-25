@@ -22,7 +22,7 @@ import static io.confluent.examples.streams.microservices.util.beans.OrderId.id;
 import static java.util.Arrays.asList;
 import static org.assertj.core.api.Assertions.assertThat;
 
-public class OrderValidationRuleAggregatorSubServiceTest extends MicroserviceTestUtils {
+public class RuleAggregatorServiceTest extends MicroserviceTestUtils {
     private List<Order> orders;
     private List<OrderValidation> ruleResults;
     private RuleAggregatorService ordersService;

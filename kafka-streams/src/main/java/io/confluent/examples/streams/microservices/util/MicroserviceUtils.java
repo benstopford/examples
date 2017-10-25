@@ -3,17 +3,28 @@ package io.confluent.examples.streams.microservices.util;
 import io.confluent.examples.streams.avro.microservices.ProductType;
 import io.confluent.examples.streams.microservices.Schemas;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.producer.KafkaProducer;
+import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.state.RocksDBConfigSetter;
+import org.eclipse.jetty.server.Server;
+import org.eclipse.jetty.servlet.ServletContextHandler;
+import org.eclipse.jetty.servlet.ServletHolder;
+import org.glassfish.jersey.jackson.JacksonFeature;
+import org.glassfish.jersey.server.ResourceConfig;
+import org.glassfish.jersey.servlet.ServletContainer;
 import org.rocksdb.Options;
 
+import javax.ws.rs.container.AsyncResponse;
+import javax.ws.rs.core.Response;
 import java.io.IOException;
 import java.net.ServerSocket;
 import java.util.Map;
 import java.util.Properties;
+import java.util.concurrent.TimeUnit;
 
 public class MicroserviceUtils {
     public static final String DEFAULT_BOOTSTRAP_SERVERS = "localhost:9092";
@@ -113,5 +124,49 @@ public class MicroserviceUtils {
                 }
             };
         }
+    }
+
+    public static void setTimeout(long timeout, AsyncResponse asyncResponse) {
+        asyncResponse.setTimeout(timeout, TimeUnit.MILLISECONDS);
+        asyncResponse.setTimeoutHandler(resp -> resp.resume(
+                Response.status(Response.Status.GATEWAY_TIMEOUT)
+                        .entity("HTTP GET timed out after " + timeout + " ms")
+                        .build()));
+    }
+
+    public static Server startJetty(int port, Object binding) {
+        ServletContextHandler context = new ServletContextHandler(ServletContextHandler.SESSIONS);
+        context.setContextPath("/");
+
+        Server jettyServer = new Server(port);
+        jettyServer.setHandler(context);
+
+        ResourceConfig rc = new ResourceConfig();
+        rc.register(binding);
+        rc.register(JacksonFeature.class);
+
+        ServletContainer sc = new ServletContainer(rc);
+        ServletHolder holder = new ServletHolder(sc);
+        context.addServlet(holder, "/*");
+
+        try {
+            jettyServer.start();
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+        System.out.println("Listening on " + jettyServer.getURI());
+        return jettyServer;
+    }
+
+    public static <T> KafkaProducer startProducer(String bootstrapServers, Schemas.Topic<String, T> topic) {
+        Properties producerConfig = new Properties();
+        producerConfig.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
+        producerConfig.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, "true");
+        producerConfig.put(ProducerConfig.RETRIES_CONFIG, String.valueOf(Integer.MAX_VALUE));
+        producerConfig.put(ProducerConfig.ACKS_CONFIG, "all");
+
+        return new KafkaProducer(producerConfig,
+                topic.keySerde().serializer(),
+                topic.valueSerde().serializer());
     }
 }

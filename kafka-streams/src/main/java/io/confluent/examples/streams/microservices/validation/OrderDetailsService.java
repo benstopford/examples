@@ -25,8 +25,18 @@ import static io.confluent.examples.streams.avro.microservices.OrderValidationTy
 import static io.confluent.examples.streams.microservices.Schemas.Topics;
 import static java.util.Collections.singletonList;
 
+/**
+ * Validates the details of each order.
+ * - Is the quantity positive?
+ * - Is there a customerId
+ * - etc...
+ * <p>
+ * This service could be built with Kafka Streams but we've used a Producer/Consumer pair
+ * including the integration with Kafka's Exactly Once feature to demonstrate this other
+ * style of building event driven services.
+ */
 public class OrderDetailsService implements Service {
-    public static final String CONSUMER_GROUP_ID = "OrderValidationService";
+    private static final String CONSUMER_GROUP_ID = "OrderValidationService";
     private KafkaConsumer<String, Order> consumer;
     private KafkaProducer<String, OrderValidation> producer;
     private ExecutorService executorService = Executors.newSingleThreadExecutor();
@@ -54,6 +64,8 @@ public class OrderDetailsService implements Service {
                 for (ConsumerRecord<String, Order> record : records) {
                     Order order = record.value();
                     if (OrderType.CREATED.equals(order.getState())) {
+                        //Validate the order then send the result (but note we are in a transaction so
+                        //nothing will be "seen" downstream until we commit the transaction below)
                         producer.send(result(order, isValid(order) ? PASS : FAIL));
                         recordOffset(consumedOffsets, record);
                     }
@@ -124,7 +136,6 @@ public class OrderDetailsService implements Service {
     private boolean isValid(Order order) {
         if (order.getCustomerId() == null) return false;
         if (order.getQuantity() < 0) return false;
-        if (order.getState() != OrderType.CREATED) return false;
         if (order.getPrice() < 0) return false;
         if (order.getProduct() == null) return false;
         return true;

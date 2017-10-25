@@ -1,5 +1,6 @@
 package io.confluent.examples.streams.microservices;
 
+import io.confluent.examples.streams.avro.microservices.Order;
 import io.confluent.examples.streams.avro.microservices.OrderType;
 import io.confluent.examples.streams.avro.microservices.ProductType;
 import io.confluent.examples.streams.microservices.util.MicroserviceTestUtils;
@@ -18,6 +19,7 @@ import javax.ws.rs.client.Entity;
 import javax.ws.rs.core.GenericType;
 import javax.ws.rs.core.Response;
 import java.net.HttpURLConnection;
+import java.util.Arrays;
 
 import static io.confluent.examples.streams.microservices.util.MicroserviceUtils.randomFreeLocalPort;
 import static javax.ws.rs.core.MediaType.APPLICATION_JSON_TYPE;
@@ -82,6 +84,38 @@ public class OrdersServiceTest extends MicroserviceTestUtils {
 
 
     @Test
+    public void shouldLinkToNextVersionOfRecordInResponse() throws Exception {
+        OrderBean beanV1 = new OrderBean(OrderId.id(1L, 0), 2L, OrderType.CREATED, ProductType.JUMPERS, 10, 100d);
+        Order orderV2 = new Order(OrderId.id(1L, 1), 2L, OrderType.VALIDATED, ProductType.JUMPERS, 10, 100d);
+        OrderBean beanV2 = OrderBean.toBean(orderV2);
+
+        final Client client = ClientBuilder.newClient();
+        final String baseUrl = "http://localhost:" + port + "/orders";
+
+        //Stub the underlying orders service
+        rest1 = new OrdersService(
+                new HostInfo("localhost", port)
+        );
+        rest1.start(CLUSTER.bootstrapServers());
+
+        //When post order
+        Response response = client.target(baseUrl + "/post")
+                .request(APPLICATION_JSON_TYPE)
+                .post(Entity.json(beanV1));
+
+        //Simulate the order being validated
+        MicroserviceTestUtils.sendOrders(Arrays.asList(orderV2));
+
+        //Then the URI returned by the orginal post should point to the validated order
+        OrderBean returnedBean = client.target(response.getLocation())
+                .request(APPLICATION_JSON_TYPE)
+                .get(new GenericType<OrderBean>() {
+                });
+        //Then
+        assertThat(returnedBean).isEqualTo(beanV2);
+    }
+
+    @Test
     public void shouldTimeoutGetIfNoResponseIsFound() throws Exception {
         final Client client = ClientBuilder.newClient();
         final String baseUrl = "http://localhost:" + port + "/orders";
@@ -93,10 +127,10 @@ public class OrdersServiceTest extends MicroserviceTestUtils {
         );
         rest1.start(CLUSTER.bootstrapServers());
 
-        //When get order should timeout
+        //When GET order should timeout
         try {
             client.target(baseUrl + "/order/" + OrderId.id(1))
-                    .queryParam("timeout", 100)
+                    .queryParam("timeout", 100) //Lower the request timeout
                     .request(APPLICATION_JSON_TYPE)
                     .get(new GenericType<OrderBean>() {
                     });
@@ -105,7 +139,6 @@ public class OrdersServiceTest extends MicroserviceTestUtils {
             assertThat(e.getMessage()).isEqualTo("HTTP 504 Gateway Timeout");
         }
     }
-
 
     @Test
     public void shouldGetOrderByIdWhenOnDifferentHost() throws Exception {

@@ -45,9 +45,6 @@ public class FraudServiceTest extends MicroserviceTestUtils {
 
     @Test
     public void shouldValidateWhetherOrderAmountExceedsFraudLimitOverWindow() throws Exception {
-
-        //TODO - add event time to this.
-
         //Given
         fraudService = new FraudService();
 

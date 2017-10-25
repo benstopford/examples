@@ -41,15 +41,15 @@ import static java.util.Arrays.asList;
 import static javax.ws.rs.core.MediaType.APPLICATION_JSON_TYPE;
 
 public class AcceptanceTest extends MicroserviceTestUtils {
+    private volatile boolean loadTestRunning = true;
+    private volatile int idCounter = 0;
     public final String restAddress = "localhost";
     private List<Service> services = new ArrayList<>();
     private static int restPort;
     private OrderBean returnedBean;
 
-    //TODO test latency of processing for records when in a batch of say 200 and end to end latency may stretch.
-
     @Test
-    public void shouldProcessOneOrderEndToEnd() throws Exception {
+    public void shouldPutNewOrderThenGetValidated() throws Exception {
         final Client client = ClientBuilder.newClient();
         final String baseUrl = "http://localhost:" + restPort + "/orders";
 
@@ -179,9 +179,6 @@ public class AcceptanceTest extends MicroserviceTestUtils {
             ));
         }
     }
-
-    private volatile boolean loadTestRunning = true;
-    private volatile int idCounter = 0;
 
     @Test
     public void shouldHandleConcurrentRequests() throws Exception {

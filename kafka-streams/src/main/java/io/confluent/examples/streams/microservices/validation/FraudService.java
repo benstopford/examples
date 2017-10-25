@@ -56,10 +56,9 @@ public class FraudService implements Service {
         //We use a trick to make this work: we disable caching so we get a complete changelog stream.
         KTable<Windowed<Long>, OrderValue> aggregate = orders
                 .groupBy((id, order) -> order.getCustomerId(), Serdes.Long(), ORDERS.valueSerde())
-                .aggregate(
-                        OrderValue::new,
-                        (custId, order, orderValue) ->
-                                new OrderValue(order, orderValue.getValue() + order.getQuantity() * order.getPrice()),
+                .aggregate(OrderValue::new,
+                        (custId, order, orderValue) -> new OrderValue(
+                                order, orderValue.getValue() + order.getQuantity() * order.getPrice()),
                         TimeWindows.of(60 * 1000L),
                         Schemas.ORDER_VALUE_SERDE);
 
@@ -68,7 +67,7 @@ public class FraudService implements Service {
                 .toStream((windowedKey, orderValue) -> windowedKey.key())
                 .selectKey((id, orderValue) -> orderValue.getOrder().getId());
 
-        //Now branch the stream into two, for pass and fail, based on whether the windowed total is over $2000
+        //Now branch the stream into two, for pass and fail, based on whether the windowed total is over Fraud Limit
         KStream<String, OrderValue>[] forks = ordersWithTotals.branch(
                 (id, orderValue) -> orderValue.getValue() >= FRAUD_LIMIT,
                 (id, orderValue) -> orderValue.getValue() < FRAUD_LIMIT);
@@ -79,8 +78,13 @@ public class FraudService implements Service {
         forks[1].mapValues((pair) -> new OrderValidation(pair.getOrder().getId(), FRAUD_CHECK, PASS))
                 .to(ORDER_VALIDATIONS.keySerde(), ORDER_VALIDATIONS.valueSerde(), ORDER_VALIDATIONS.name());
 
+        //disable caching to ensure a complete aggregate changelog. This is a little trick we need to apply
+        //as caching in Kafka Streams will conflate subsequent updates for the same key. Disabling caching ensures
+        //we get a complete "changelog" from the aggregate(...) step above (i.e. every input event will have a
+        //corresponding output event.
         Properties props = baseStreamsConfig(bootstrapServers, stateDir, FRAUD_SERVICE_APP_ID);
-        props.setProperty(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, "0"); //disable caching to ensure we get a complete aggregate changelog
+        props.setProperty(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, "0");
+
         return new KafkaStreams(builder, props);
     }
 
